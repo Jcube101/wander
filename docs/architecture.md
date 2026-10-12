@@ -3,7 +3,7 @@
 ```
 Hard disk (originals — never uploaded)
   D:\<trip>\                 photos, DJI clips (+ .LRF proxies), clip_locations.csv, overrides.json
-  D:\<trip>\TripMap\         copy of tripmap/ (build.py, viewer.html, serve.py, publish.py, Open TripMap.bat)
+  D:\<trip>\Open Wander Editor.bat   one-file launcher → runs C:\Users\jobjo\Github\wander\tripmap\serve.py on this folder
   D:\<trip>\_tripmap\        built bundle: thumbs/ cards/ media/ trip.json  (+ local-only trip.js, index.html)
         │
         │  publish.py (rclone; key scoped to the bucket)
