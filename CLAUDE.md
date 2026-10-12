@@ -4,7 +4,7 @@ Context for AI assistants working in this repo.
 
 ## What this is
 Tooling and infrastructure for Wander, a private multi-trip travel archive. Two parts:
-- `tripmap/` — Python (3.9+, Pillow; shells out to exiftool, ffmpeg, rclone). Runs on Job's Windows machine against a trip folder on an external drive.
+- `tripmap/` — Python (3.9+, Pillow; shells out to exiftool, ffmpeg, rclone). Runs **from this repo** on Job's Windows machine against a trip folder on an external drive; each trip folder only holds `Open Wander Editor.bat` (template in `tripmap/`). Never copy the code into trip folders.
 - `worker/` — Cloudflare Worker (plain JS, no deps) bound to the private R2 bucket `trip-media`, custom domain `media.job-joseph.com`.
 
 The website itself is NOT in this repo: it's the Lovable project synced to `Jcube101/travelogue-map-memory`. Change it via Lovable prompts; it must be re-published in Lovable to reach wander.job-joseph.com.

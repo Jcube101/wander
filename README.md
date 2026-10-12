@@ -20,10 +20,12 @@ Private, per-trip travel archive. Photos and videos stay on my hard disk; small 
 pip install pillow
 winget install Gyan.FFmpeg OliverBetz.ExifTool Rclone.Rclone
 
-# per trip: copy tripmap\ into the trip folder as TripMap\, then
-python "D:\<trip>\TripMap\build.py" "D:\<trip>" --name "<Trip title>"
+# per trip (code always runs from this repo)
+$W = "C:\Users\jobjo\Github\wander\tripmap"
+python "$W\build.py" "D:\<trip>" --name "<Trip title>"
+copy "$W\Open Wander Editor.bat" "D:\<trip>\"
 # edit + publish
-double-click D:\<trip>\TripMap\Open TripMap.bat
+double-click D:\<trip>\Open Wander Editor.bat
 ```
 
 Worker: `cd worker && npm test && npx wrangler deploy`
