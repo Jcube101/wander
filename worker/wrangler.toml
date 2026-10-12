@@ -1,0 +1,15 @@
+name = "wander-media"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+workers_dev = false
+
+# The Worker answers everything on media.job-joseph.com.
+# (Remove the R2 bucket's own custom domain for media.job-joseph.com first —
+# the bucket then has no public address; only this Worker and your rclone key reach it.)
+routes = [
+  { pattern = "media.job-joseph.com", custom_domain = true }
+]
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "trip-media"
