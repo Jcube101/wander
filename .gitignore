@@ -1,0 +1,43 @@
+# --- Never commit media or location data (privacy by design) ---
+*.jpg
+*.jpeg
+*.png
+*.heic
+*.heif
+*.webp
+*.mp4
+*.mov
+*.m4v
+*.lrf
+*.LRF
+*.MP4
+*.JPG
+_tripmap/
+overrides.json
+overrides.bak.json
+overrides-backup-*.json
+clip_locations.csv
+clip_locations.kml
+*_meta.csv
+exif_samples.txt
+trip.json
+trip.js
+trips.json
+build_args.json
+build_errors.txt
+
+# --- Secrets ---
+.env
+.env.*
+*.pem
+.dev.vars
+rclone.conf
+
+# --- Tooling ---
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+.wrangler/
+.DS_Store
+Thumbs.db
