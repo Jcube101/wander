@@ -35,6 +35,7 @@ Hard-won lessons. Each one: **symptom → cause → fix/rule**. Add new ones her
 | Map tiles stopped loading | CARTO raster tiles now need an API key | Esri tiles + OSM |
 | Edit mode lost after picking a day | `history.replaceState` dropped `?edit` | Keep `location.search` when rewriting the URL |
 | Hidden element still showed | A CSS `display` rule beat the `[hidden]` attribute | Add an explicit `[hidden]{display:none}` rule |
+| Editor changes invisible after a refresh | `serve.py` served `_tripmap/index.html`, a copy of `viewer.html` made at build time | `serve.py` serves the repo's `viewer.html` fresh on every request (`no-store`, also for `trip.js`); the copy is only for `file://` |
 | Day chips stretched tall | Grid rows shared spare height | `grid-template-rows: auto auto 1fr auto` |
 
 ## Site / data contract

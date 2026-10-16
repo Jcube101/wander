@@ -25,6 +25,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 OUT_NAME = "_tripmap"
+VIEWER_PATHS = ("/", "/index.html")
 for ext, typ in {".js": "text/javascript", ".mp4": "video/mp4", ".json": "application/json",
                  ".jpg": "image/jpeg", ".html": "text/html", ".css": "text/css"}.items():
     mimetypes.add_type(typ, ext)
@@ -86,8 +87,10 @@ def make_handler(root: Path, out: Path, build: Build, port_ref):
         def log_message(self, fmt, *a):  # keep the console readable
             pass
 
+        cache_control = "no-cache"
+
         def end_headers(self):
-            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Cache-Control", self.cache_control)
             self.send_header("Accept-Ranges", "bytes")
             super().end_headers()
 
@@ -118,8 +121,32 @@ def make_handler(root: Path, out: Path, build: Build, port_ref):
             return origin is None or origin in ok
 
         # ---------- routes
-        def do_GET(self):
+        # The page always comes from the repo, read fresh each time, so editor
+        # changes show on refresh. _tripmap/index.html is a build-time copy for
+        # file:// use only and would be stale here.
+        def _viewer(self, head=False):
+            body = (HERE / "viewer.html").read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if not head:
+                self.wfile.write(body)
+
+        def _route(self):
             path = self.path.split("?", 1)[0]
+            self.cache_control = "no-store" if path in VIEWER_PATHS or path == "/trip.js" else "no-cache"
+            return path
+
+        def do_HEAD(self):
+            if self._route() in VIEWER_PATHS:
+                return self._viewer(head=True)
+            return super().do_HEAD()
+
+        def do_GET(self):
+            path = self._route()
+            if path in VIEWER_PATHS:
+                return self._viewer()
             if path.startswith("/api/"):
                 if not self._trusted():
                     return self._text("forbidden", 403)
@@ -229,7 +256,7 @@ def main():
 
     root = Path(args.trip).resolve() if args.trip else HERE.parent
     out = root / OUT_NAME
-    if not (out / "index.html").exists():
+    if not (out / "trip.js").exists():
         sys.exit(f"No map found in {out}. Build it first:\n"
                  f'  python "{HERE / "build.py"}" "{root}" --name "My Trip"')
 

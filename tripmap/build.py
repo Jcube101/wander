@@ -3,8 +3,9 @@
 TripMap builder: point it at a folder of trip photos/videos and it produces a
 self-contained map bundle (index.html + trip.js + thumbs/ + media/).
 
-The bundle opens by double-clicking index.html (no server needed) and can be
-uploaded as-is to R2 / any static host. Originals are never modified.
+The bundle opens by double-clicking index.html (no server needed); serve.py
+(the editor) serves the repo's viewer.html instead. publish.py uploads only
+trip.json and the previews it uses. Originals are never modified.
 
 Requires: Python 3.9+, Pillow, exiftool and ffmpeg on PATH.
 
@@ -625,6 +626,8 @@ def main():
     }
     (out / "trip.js").write_text("window.TRIP = " + json.dumps(data, separators=(",", ":")) + ";\n",
                                  encoding="utf-8")
+    # Only for opening the bundle straight from disk (file://). serve.py ignores
+    # this copy and serves the repo's viewer.html, so editor changes show on refresh.
     shutil.copyfile(HERE / "viewer.html", out / "index.html")
 
     # Public data for the website (no local folder paths or camera details)

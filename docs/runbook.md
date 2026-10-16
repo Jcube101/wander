@@ -10,7 +10,7 @@
 | Give someone access | Zero Trust → Access → Rule groups → add their email to the trip's crew (or `Wander – All trips`) |
 | Remove someone | Delete their email from the group; optionally Zero Trust → Users → revoke session |
 | Change the site design | Lovable prompt → re-publish in Lovable |
-| Change the editor/builder | Edit in the repo → refresh the editor page (restart the launcher window if `serve.py` changed) → commit to main |
+| Change the editor/builder | Edit in the repo → `viewer.html`: refresh the editor page · `build.py`/`publish.py`: used on the next Apply/Scan/Publish · `serve.py`: restart the launcher window → commit to main |
 | Change the Worker | `cd worker && npm test && npx wrangler deploy` |
 
 ## New trip
