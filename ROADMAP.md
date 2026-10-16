@@ -9,6 +9,7 @@ Size: **S** ≈ an evening, **M** ≈ a weekend, **L** ≈ several sessions. Kno
 - [x] **Worker on `media.job-joseph.com`:** allow-list, Range, CORS, `/auth`, `/me`.
 - [x] **Per-trip Access:** rule groups, one app per trip, sign-in flow, lock badges.
 - [x] **Lovable site:** landing + trip pages, gallery, map, timeline, viewer, play journey.
+- [x] **Stale bucket objects removed:** early-publish `trip.js` / `index.html` deleted from R2.
 - [x] **Run from the repo:** one-file launcher per trip folder; one-click Apply / Scan / Publish.
 
 ## Now
@@ -18,7 +19,6 @@ Size: **S** ≈ an evening, **M** ≈ a weekend, **L** ≈ several sessions. Kno
 | pytest suite for tripmap (fixture trip, stubbed exiftool/ffmpeg/rclone) | Time/location rules are subtle; no tests today | M | — |
 | GitHub Actions: worker tests (tripmap tests once they exist) | Catch Worker regressions before deploy | S | pytest for the tripmap half |
 | R2 budget check in `publish.py` (warn near 10 GB) | Each trip is ~2.5 GB; the 4th trip could leave the free tier | S | — |
-| Delete stale `thailand-2026/trip.js` + `index.html` from R2 | Old objects hold local paths; Worker blocks them but they shouldn't exist | S | — |
 
 ## Next
 
@@ -35,5 +35,4 @@ Size: **S** ≈ an evening, **M** ≈ a weekend, **L** ≈ several sessions. Kno
 |---|---|---|---|
 | Reverse-geocoded place names | Captions and day chips say "Chiang Mai", not just a pin | M | Data-contract change + Lovable prompt; names stay in protected `trip.json` only |
 | Duplicate detection (perceptual hash) | Same photo from two sources appears twice | M | pytest suite |
-| Original-file request flow (time-limited links, crew only) | Friends ask for full-res files | L | Access scripting; never public |
 | Lovable preview loading protected trips | Preview origin has no Access cookie | S | Likely won't fix — test on wander.job-joseph.com |

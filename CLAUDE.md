@@ -16,6 +16,7 @@ The website itself is NOT in this repo: it's the Lovable project synced to `Jcub
 - **Never upload `trip.js` or `index.html`** to R2 — `trip.js` contains local folder paths. `publish.py` excludes them; the Worker refuses them anyway.
 - **rclone key is bucket-scoped** → every rclone call needs `--s3-no-check-bucket` (already in `publish.py`).
 - Don't add a database. Identity = Cloudflare Access cookie; data = static JSON in R2.
+- **Git:** private repo, so commit straight to main. No branches or PRs unless Job asks.
 
 ## Data contract
 `docs/data-contract.md` is the interface between `tripmap/` (producer) and the Lovable site (consumer). Changing a field means updating that doc and sending Lovable a prompt.

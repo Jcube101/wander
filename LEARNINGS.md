@@ -24,7 +24,7 @@ Hard-won lessons. Each one: **symptom → cause → fix/rule**. Add new ones her
 |---|---|---|
 | DJI clips unplaced or at wrong times | DJI Pocket 4P writes no GPS; its clock drifts (~+07:45 vs UTC on Thailand) | Time = filename + `--camera-offset`; location = nearest phone photo or manual fix |
 | WhatsApp items at odd times or other trips | WhatsApp strips EXIF | Date from filename + file time; drop items >1 day outside the trip; never auto-locate |
-| Some Sony phone JPEGs fail with an empty error | Full-size Pillow decode fails intermittently; the error has no message | Reduced-size `draft` decoding, sequential retry, log `repr(e)` |
+| Some Sony phone JPEGs fail with an empty error | Not confirmed. Full-size decodes failed with an empty error message, mostly during parallel builds | Reduced-size `draft` decoding, sequential retry, log `repr(e)` |
 
 ## Viewer / editor
 
@@ -48,5 +48,5 @@ Hard-won lessons. Each one: **symptom → cause → fix/rule**. Add new ones her
 |---|---|---|
 | `git init` ran in the home folder | Backslash path broke `cd` in Git Bash, next command ran anyway | Use forward slashes (`~/Github/wander`); chain with `&&` |
 | Shell killed itself | `pkill -f <pattern>` matched its own command line | Kill by port or PID |
-| Trip folders ran different versions of the code | Code was copied into each trip folder | One copy in the repo; a one-file launcher per trip |
+| Every code change had to be made twice: in the repo and in the copy inside the trip folder on D: | The code was copied into each trip folder | Run from the repo; each trip folder only holds `Open Wander Editor.bat` |
 | Time spent "fixing" non-bugs | Reports were often misdiagnoses | Investigate and reproduce before fixing |

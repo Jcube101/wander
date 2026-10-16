@@ -151,6 +151,7 @@ One self-hosted app per trip with destinations `media.job-joseph.com/<slug>` and
 ## Non-goals
 
 - Public sharing of originals
+- Serving originals online, even to the crew. Originals never leave the disk; anyone who wants one asks Job.
 - In-browser editing on the live site
 - A user database or our own auth
 - Subdomains per trip
