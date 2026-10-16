@@ -29,7 +29,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
   font:14px/1.4 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-#app{display:grid;grid-template-rows:auto auto 1fr auto;height:100dvh}
+#app{display:grid;grid-template-rows:auto auto 1fr auto;grid-template-columns:minmax(0,1fr);height:100dvh}
 header{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line);
   background:var(--panel);z-index:500}
 h1{font:600 20px/1.1 Fraunces,Georgia,serif;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -103,8 +103,42 @@ body.editing #edit{display:flex}
 #edit .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
 #edit .btn{padding:4px 10px;font-size:12px}
 #edit .btn:disabled{opacity:.4;cursor:default}
-#hint{color:var(--muted)}
-#hint b{color:var(--ink)}
+[hidden]{display:none!important}
+#edit .seg{max-width:100%;overflow-x:auto;scrollbar-width:none}
+#edit .seg button{white-space:nowrap}
+#edit .btn.icon{width:28px;justify-content:center;padding:4px 0}
+.pop{display:inline-flex}
+#edit{position:relative}
+.menu{position:absolute;bottom:calc(100% + 6px);right:16px;max-width:calc(100vw - 32px);z-index:1100;background:var(--panel);border:1px solid var(--line);
+  border-radius:12px;box-shadow:var(--shadow);padding:6px;min-width:220px;display:flex;flex-direction:column;gap:2px}
+.menu .mi{border:0;background:transparent;color:var(--ink);text-align:left;padding:7px 10px;border-radius:8px;
+  font:500 13px Inter,sans-serif;cursor:pointer;display:flex;align-items:center;gap:8px;width:100%}
+.menu .mi:hover{background:var(--chip)}
+.menu hr{border:0;border-top:1px solid var(--line);margin:4px 2px}
+.menu.help{min-width:280px;max-width:min(340px,calc(100vw - 32px));padding:10px 14px;font-size:12px;color:var(--muted)}
+.menu.help p{margin:0 0 6px}
+.menu.help kbd{font:600 11px Inter,sans-serif;background:var(--chip);color:var(--ink);border-radius:4px;padding:1px 5px}
+/* selection bar: floats over the map's bottom edge so the strip never moves */
+#selbar{position:absolute;left:8px;right:8px;bottom:24px;z-index:1000;margin:0 auto;width:fit-content;max-width:calc(100% - 16px);
+  display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:8px 10px;background:var(--panel);
+  border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);font-size:12px}
+#selbar .btn{padding:4px 10px;font-size:12px}
+#selbar select,#selbar input{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;
+  padding:4px 10px;font:500 12px Inter,sans-serif}
+#selbar input{width:78px}
+#selbar select{max-width:170px}
+#selhead.full{flex-basis:100%}
+#selcount{font-weight:600}
+#where{color:var(--muted)}
+#where:not(:empty)::before{content:" · "}
+#selbar .grp{display:inline-flex;gap:4px}
+body.hassel #empty{visibility:hidden}
+.pin.hl{outline:3px solid var(--accent);outline-offset:1px;animation:hl 1.2s ease-out 2}
+@keyframes hl{0%{box-shadow:0 0 0 0 var(--accent)}100%{box-shadow:0 0 0 14px transparent}}
+.pin.nb{outline:2px dashed var(--accent);outline-offset:1px}
+.gaplbl{position:absolute;left:50%;bottom:calc(100% + 6px);transform:translateX(-50%);white-space:nowrap;
+  background:var(--accent);color:var(--accent-ink);font:600 11px Inter,sans-serif;border-radius:999px;padding:1px 7px;
+  box-shadow:var(--shadow)}
 .tag{display:inline-block;background:var(--warn);color:#fff;border-radius:999px;padding:1px 8px;font:600 11px Inter,sans-serif}
 body.editing #strip .t.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
 body.editing #strip .t.sel::after{content:"✓";position:absolute;top:2px;left:3px;background:var(--accent);color:var(--accent-ink);
@@ -117,18 +151,12 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
   .sub{display:none} #stage{padding:8px} .nav{width:34px;height:34px}
   #prev{left:4px}#next{right:4px}
 }
-#edit .sep{width:1px;height:20px;background:var(--line)}
-#edit select,#edit input{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;
-  padding:4px 10px;font:500 12px Inter,sans-serif}
-#edit input{width:78px}
-#edit select{max-width:190px}
-.tag[hidden]{display:none}
 .pin.arch{opacity:.45}
 #status{color:var(--muted);max-width:520px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:help}
 #status.err{white-space:normal;max-width:none;flex-basis:100%;order:99;font-size:12px}
 #status.warn{white-space:normal;max-width:none;flex-basis:100%;order:99;font-size:12px}
 #status.ok{color:#2fb171}#status.err{color:#d9534f}#status.warn{color:#d9a400}
-.srv{display:none}body.server .srv{display:inline-flex}body.server .nosrv{display:none}
+body:not(.server) .srv,body.server .nosrv{display:none!important}
 </style>
 </head>
 <body>
@@ -143,33 +171,53 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
     <button class="btn primary" id="play" title="Play the trip day by day">▶ Play trip</button>
   </header>
   <nav id="days" aria-label="Days"></nav>
-  <main><div id="map"></div><div id="empty"></div></main>
+  <main><div id="map"></div><div id="empty"></div>
+    <div id="selbar" aria-label="Selection" hidden>
+      <span id="selhead"><span id="selcount"></span><span id="where"></span></span>
+      <button class="btn" id="placeprev">⇤ Place at previous</button>
+      <button class="btn" id="placenext">Place at next ⇥</button>
+      <button class="btn" id="unset" title="Take selected shots off the map">Remove location</button>
+      <select id="moveday" title="Move selected shots to another day (keeps their clock time)"><option value="">Move to day…</option></select>
+      <span class="grp"><input id="shift" placeholder="+1:30" title="Shift selected shots' time, e.g. -0:45 or +2"><button class="btn" id="shiftbtn">Shift time</button></span>
+      <button class="btn" id="setcover" title="Use this photo for the landing card and the trip hero">Set as cover</button>
+      <button class="btn" id="archive" title="Hide selected shots from the published trip; they stay here (A)">Archive</button>
+      <button class="btn" id="restore" title="Put selected archived shots back in the published trip (Shift+A)">Restore</button>
+      <button class="btn" id="undo" title="Undo the last change (Ctrl+Z)">Undo</button>
+      <button class="btn" id="selnone" title="Clear the selection (Esc)">✕ Clear</button>
+    </div>
+  </main>
   <div id="edit" aria-label="Edit">
     <span class="seg" id="filt">
-      <button data-f="all">All</button><button data-f="review">Needs review</button><button data-f="none">No location</button><button data-f="archived" title="Hidden from the published trip">Archived <span id="narch"></span></button>
+      <button data-f="all">All</button><button data-f="review">Needs review</button><button data-f="none">No location <span id="nnone"></span></button><button data-f="archived" title="Hidden from the published trip">Archived <span id="narch"></span></button>
     </span>
-    <button class="btn" id="selall">Select all</button>
-    <button class="btn" id="selnone">Clear</button>
-    <span class="sep"></span>
-    <button class="btn" id="unset" title="Take selected shots off the map">Remove location</button>
-    <button class="btn" id="archive" title="Hide selected shots from the published trip; they stay here (A)">Archive</button>
-    <button class="btn" id="restore" title="Put selected archived shots back in the published trip (Shift+A)">Restore</button>
-    <button class="btn" id="setcover">Set as cover</button>
-    <button class="btn" id="autocover" title="Let the build pick the cover again">Automatic cover</button>
-    <select id="moveday" title="Move selected shots to another day (keeps their clock time)"><option value="">Move to day…</option></select>
-    <input id="shift" placeholder="+1:30" title="Shift selected shots' time, e.g. -0:45 or +2">
-    <button class="btn" id="shiftbtn">Shift time</button>
-    <button class="btn" id="undo">Undo</button>
-    <span id="hint"></span>
     <span class="grow"></span>
     <span id="status"></span>
     <span class="tag" id="dirty" hidden></span>
+    <button class="btn" id="undotop" title="Undo the last change (Ctrl+Z)" hidden>Undo</button>
     <button class="btn srv primary" id="apply" title="Bake your fixes into the map (seconds)">Apply to map</button>
-    <button class="btn srv" id="scan" title="Find photos/videos added to the trip folder and build their previews">Scan for new files</button>
     <button class="btn srv" id="publish" title="Upload changes to R2 so the website shows them">Publish</button>
-    <button class="btn" id="import" title="Merge fixes from an overrides.json file">Import</button>
     <button class="btn nosrv primary" id="export">Export overrides.json</button>
-    <button class="btn srv" id="backup" title="Download a copy of your fixes">Backup</button>
+    <span class="pop">
+      <button class="btn icon" id="morebtn" title="More" aria-haspopup="menu" aria-expanded="false" aria-controls="more">⋯</button>
+      <div class="menu" id="more" role="menu" hidden>
+        <button class="mi srv" id="scan" role="menuitem" title="Find photos/videos added to the trip folder and build their previews">Scan for new files</button>
+        <button class="mi" id="import" role="menuitem" title="Merge fixes from an overrides.json file">Import…</button>
+        <button class="mi srv" id="backup" role="menuitem" title="Download a copy of your fixes">Backup</button>
+        <button class="mi" id="autocover" role="menuitem" title="Let the build pick the cover again">Automatic cover</button>
+        <button class="mi" id="selall" role="menuitem">Select all in view</button>
+        <hr>
+        <label class="mi"><input type="checkbox" id="follow"> Follow selection on the map</label>
+      </div>
+    </span>
+    <span class="pop">
+      <button class="btn icon" id="helpbtn" title="Help and shortcuts (?)" aria-expanded="false" aria-controls="help">?</button>
+      <div class="menu help" id="help" role="dialog" aria-label="Help" hidden>
+        <p>Click shots to select · Shift-click for a range · Double-click to view.</p>
+        <p>With shots selected, click the map or a pin to place them. Drag a pin to move it.</p>
+        <p>Selecting a shot shows where it happened: its pin, or the nearest placed shots before and after it.</p>
+        <p><kbd>[</kbd> place at previous · <kbd>]</kbd> place at next · <kbd>A</kbd> archive · <kbd>Shift</kbd>+<kbd>A</kbd> restore · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Esc</kbd> clear selection · <kbd>?</kbd> this help</p>
+      </div>
+    </span>
     <input type="file" id="importfile" accept=".json,application/json" hidden>
   </div>
   <div id="strip" aria-label="Shots"></div>
@@ -188,6 +236,43 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
 <script src="trip.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script id="tripmap-pure">
+// Pure helpers, no DOM. tripmap/tests/test_viewer.mjs extracts this block and tests it.
+var TripPure = (() => {
+  // Nearest placed, published shots before the earliest selected shot and after the
+  // latest one. items: sorted by t, each {id, t, day, lat, archived}; selected: Set of ids.
+  // Returns {prev, next, show}: prev/next = {x, gap (seconds, signed), sameDay} or null;
+  // show = the ones to put on the map: same-day neighbours if there are any, else both.
+  function neighbours(items, selected) {
+    let first = -1, last = -1;
+    for (let i = 0; i < items.length; i++) if (selected.has(items[i].id)) { if (first < 0) first = i; last = i; }
+    if (first < 0) return {prev: null, next: null, show: []};
+    const ok = x => x.lat != null && !x.archived && !selected.has(x.id);
+    // Sorted by time, so the first hit is the nearest; days follow time, so if it's
+    // on another day, nothing further out can be on the same day.
+    const scan = (from, dir, ref) => {
+      for (let i = from; i >= 0 && i < items.length; i += dir) {
+        const x = items[i];
+        if (ok(x)) return {x, gap: x.t - ref.t, sameDay: x.day === ref.day};
+      }
+      return null;
+    };
+    const prev = scan(first - 1, -1, items[first]), next = scan(last + 1, 1, items[last]);
+    const both = [prev, next].filter(Boolean), same = both.filter(n => n.sameDay);
+    return {prev, next, show: same.length ? same : both};
+  }
+  // Signed gap, e.g. "−12 min", "+1 h 5 min", "−2 d 3 h" (− is U+2212)
+  function fmtGap(sec) {
+    const sign = sec < 0 ? '−' : '+', m = Math.round(Math.abs(sec) / 60);
+    if (m < 60) return `${sign}${m} min`;
+    const h = Math.floor(m / 60), mm = m % 60;
+    if (h < 24) return `${sign}${h} h${mm ? ` ${mm} min` : ''}`;
+    const d = Math.floor(h / 24), hh = h % 24;
+    return `${sign}${d} d${hh ? ` ${hh} h` : ''}`;
+  }
+  return {neighbours, fmtGap};
+})();
+</script>
 <script>
 (async () => {
   const T = window.TRIP;
@@ -302,6 +387,19 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
   });
   map.addLayer(cluster);
   let routeLayer = null, showRoute = false;
+  // Edit mode's "where did this happen" overlay: copies of the relevant pins, outside the
+  // cluster, that ignore the mouse, so clicks still reach the map and the real pins.
+  const hlLayer = L.layerGroup().addTo(map);
+  // Never move the map under the user: dragging (until the glide ends), a pointer held
+  // on the map, or a recent wheel zoom.
+  let panning = false, pointerOnMap = false, lastWheel = 0;
+  map.on('dragstart', () => { panning = true; });
+  map.on('moveend', () => { panning = false; });
+  map.getContainer().addEventListener('pointerdown', () => { pointerOnMap = true; });
+  addEventListener('pointerup', () => { pointerOnMap = false; });
+  addEventListener('pointercancel', () => { pointerOnMap = false; });
+  map.getContainer().addEventListener('wheel', () => { lastWheel = Date.now(); }, {passive: true});
+  const userOnMap = () => panning || pointerOnMap || Date.now() - lastWheel < 600;
 
   const sel = new Set(); let lastSel = null; const undoStack = [];
   const markers = new Map();
@@ -430,7 +528,7 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
       ${x.lat!=null?`<button class="btn" id="onmap">Show on map</button>`:''}
       ${x.media?`<a class="btn" href="${esc(x.media)}" download="${esc(x.orig.replace(/\.[^.]+$/,''))}_preview.${x.type==='video'?'mp4':'jpg'}">Download preview</a>`:''}
       ${req?`<a class="btn" href="${esc(req)}" target="_blank" rel="noopener">Request original</a>`:''}`;
-    const mv = $('#movehere'); if (mv) mv.onclick = () => { closeLb(); sel.clear(); sel.add(x.id); lastSel = x.id; renderStrip(); refreshEdit(); };
+    const mv = $('#movehere'); if (mv) mv.onclick = () => { closeLb(); sel.clear(); sel.add(x.id); lastSel = x.id; selChanged(); };
     const om = $('#onmap'); if (om) om.onclick = () => {
       closeLb(); const m = markers.get(x.id);
       cluster.zoomToShowLayer(m, () => m._icon && m._icon.animate?.([{transform:m._icon.style.transform+' scale(1.4)'},{transform:m._icon.style.transform}],{duration:600}));
@@ -467,8 +565,9 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
       const ids = view.map(x=>x.id), a = ids.indexOf(lastSel), b = ids.indexOf(id);
       if (a >= 0 && b >= 0) for (const i of ids.slice(Math.min(a,b), Math.max(a,b)+1)) sel.add(i);
     } else sel.has(id) ? sel.delete(id) : sel.add(id);
-    lastSel = id; renderStrip(); refreshEdit();
+    lastSel = id; selChanged();
   }
+  function selChanged() { renderStrip(); refreshEdit(); followSel(); }
   const FIELDS = ['lat','lon','loc','conf','t','tsrc','day','archived'];
   // patch: {lat,lon} | {noloc:true} | {t} | {dt} | {archive:true|false}   (dt = shift seconds)
   function change(list, patch) {
@@ -524,27 +623,89 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
   }
   function status(msg, cls='', detail='') { const s = $('#status'); s.textContent = msg; s.className = cls; s.title = detail || msg; }
 
+  // Neighbours of the current selection, using the editor's current (unapplied) times and places
+  let NB = {prev: null, next: null, show: []};
+  const dayName = x => `Day ${(DAYS.find(d => d.key === x.day) || {}).n}`;
+  const nbLabel = n => `${TripPure.fmtGap(n.gap)}${n.sameDay ? '' : `, ${dayName(n.x)}`}`;
+  const nbText = n => `${n.x.orig} (${nbLabel(n)})`;
+  function whereText(picked) {
+    if (!picked.length || picked.every(x => x.lat != null)) return '';
+    const {prev, next, show} = NB;
+    if (!show.length) return 'No placed shots to compare with';
+    if (show.length === 2) return `Between ${nbText(prev)} and ${nbText(next)}`;
+    const other = show[0] === prev ? next : prev, side = show[0] === prev ? 'after' : 'before';
+    return `Near ${nbText(show[0])} · ` + (other ? `nearest placed shot ${side}: ${nbText(other)}` : `nothing placed ${side}`);
+  }
+  // Show / hide the actions that apply; hidden ones are disabled too, so shortcuts can't fire them
+  const showAct = (id, on) => { const b = $('#'+id); b.hidden = !on; b.disabled = !on; };
   function refreshEdit() {
     if (!EDIT) return;
     document.body.classList.toggle('placing', sel.size > 0);
-    $('#hint').innerHTML = sel.size
-      ? `<b>${sel.size} selected</b> — click the map or a pin to place them, or change their day/time`
-      : `Click shots to select · Shift-click for a range · Double-click to view · Drag pins · A archive · Shift+A restore`;
-    for (const id of ['unset','selnone','moveday','shift','shiftbtn']) $('#'+id).disabled = !sel.size;
+    document.body.classList.toggle('hassel', sel.size > 0);
     const picked = items.filter(x => sel.has(x.id));
-    $('#archive').disabled = !picked.some(x => !x.archived);
-    $('#restore').disabled = !picked.some(x => x.archived);
+    NB = picked.length ? TripPure.neighbours(items, sel) : {prev: null, next: null, show: []};
+    $('#selbar').hidden = !sel.size;
+    $('#selcount').textContent = `${sel.size} selected`;
+    const w = whereText(picked); $('#where').textContent = w; $('#selhead').classList.toggle('full', !!w);
+    showAct('placeprev', !!NB.prev); showAct('placenext', !!NB.next);
+    if (NB.prev) $('#placeprev').title = `Copy the location of ${nbText(NB.prev)} ([)`;
+    if (NB.next) $('#placenext').title = `Copy the location of ${nbText(NB.next)} (])`;
+    showAct('unset', picked.some(x => x.lat != null));
+    showAct('archive', picked.some(x => !x.archived));
+    showAct('restore', picked.some(x => x.archived));
     const one = picked.length === 1 ? picked[0] : null;
-    const noCover = !one ? 'Select exactly one photo' : one.type !== 'photo' ? "Videos can't be the cover"
-                  : one.archived ? "Archived shots can't be the cover" : one.rel === coverRel ? 'Already the cover' : '';
-    $('#setcover').disabled = !!noCover;
-    $('#setcover').title = noCover || 'Use this photo for the landing card and the trip hero';
-    $('#autocover').disabled = !coverRel;
+    showAct('setcover', !!one && one.type === 'photo' && !one.archived && one.rel !== coverRel);
+    showAct('undo', sel.size > 0 && undoStack.length > 0);
+    showAct('undotop', !sel.size && undoStack.length > 0);
+    showAct('autocover', !!coverRel);
     const nA = items.filter(x => x.archived).length; $('#narch').textContent = nA ? `(${nA})` : '';
-    $('#undo').disabled = !undoStack.length;
+    const nN = items.filter(x => !x.archived && x.lat == null).length; $('#nnone').textContent = nN ? `(${nN})` : '';
     const p = pendingCount(), d = $('#dirty');
-    d.hidden = !p; d.textContent = SERVER ? `${p} not applied yet` : `${p} changes`;
+    d.hidden = !p; d.textContent = SERVER ? `${p} change${p > 1 ? 's' : ''} not applied` : `${p} change${p > 1 ? 's' : ''}`;
     $('#filt').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.f===filt));
+    drawWhere(picked);
+  }
+
+  // Highlights: the selected pins, or the neighbours with their gap and a faint dashed line
+  function hlPin(x, cls, label) {
+    return L.marker([x.lat, x.lon], {interactive: false, keyboard: false, zIndexOffset: 10000,
+      icon: L.divIcon({className: '', iconSize: [46, 46],
+        html: `<div class="pin ${cls} ${x.type==='video'?'v':''}">${x.thumb?`<img src="${esc(x.thumb)}" alt="">`:''}</div>`
+            + (label ? `<span class="gaplbl">${esc(label)}</span>` : '')})});
+  }
+  let accent = '';
+  function drawWhere(picked) {
+    hlLayer.clearLayers();
+    if (picked.length <= 30) for (const x of picked) if (x.lat != null) hlLayer.addLayer(hlPin(x, 'hl'));
+    if (picked.every(x => x.lat != null)) return;
+    for (const n of NB.show) hlLayer.addLayer(hlPin(n.x, 'nb', nbLabel(n)));
+    if (NB.show.length === 2) {
+      const [a, b] = NB.show.map(n => [n.x.lat, n.x.lon]);
+      // colour read once: getComputedStyle forces a style pass over the whole strip
+      accent = accent || getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#0c3d3a';
+      hlLayer.addLayer(L.polyline([a, b], {interactive: false, weight: 2, opacity: .5, dashArray: '4 8', color: accent}));
+    }
+  }
+  // Move the map to the selection (if "Follow selection" is on and the user isn't moving it)
+  const FOLLOW_KEY = 'tripmap-follow';
+  let follow = true;
+  try { follow = localStorage.getItem(FOLLOW_KEY) !== '0'; } catch(_) {}
+  function followSel() {
+    if (!EDIT || !follow || !sel.size || userOnMap()) return;
+    const picked = items.filter(x => sel.has(x.id));
+    const bar = $('#selbar').offsetHeight || 0;
+    const opts = {paddingTopLeft: [50, 50], paddingBottomRight: [50, bar + 50], maxZoom: 16};
+    if (picked.every(x => x.lat != null)) {
+      if (picked.length === 1) {
+        const x = picked[0], m = markers.get(x.id);
+        if (m && cluster.hasLayer(m)) cluster.zoomToShowLayer(m);
+        else map.setView([x.lat, x.lon], Math.max(map.getZoom(), 15));
+      } else map.fitBounds(L.latLngBounds(picked.map(x => [x.lat, x.lon])), opts);
+      return;
+    }
+    const pts = NB.show.map(n => [n.x.lat, n.x.lon]);
+    if (pts.length === 2) map.fitBounds(L.latLngBounds(pts), opts);
+    else if (pts.length === 1) map.setView(pts[0], Math.max(map.getZoom(), 15));
   }
 
   function download(obj, name) {
@@ -608,13 +769,17 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
     else status(LOCALHOST ? 'Helper not reachable — changes kept in this browser only' : 'Changes kept in this browser — Export when done');
     map.on('click', e => { if (sel.size) placeSelected(e.latlng); });
     $('#filt').onclick = e => { const f = e.target.closest('button')?.dataset.f; if (!f) return; filt = f; sel.clear(); setDay(curDay, false); refreshEdit(); };
-    $('#selall').onclick = () => { view.forEach(x => sel.add(x.id)); renderStrip(); refreshEdit(); };
-    $('#selnone').onclick = () => { sel.clear(); renderStrip(); refreshEdit(); };
+    $('#selall').onclick = () => { closePops(); view.forEach(x => sel.add(x.id)); selChanged(); };
+    $('#selnone').onclick = () => { sel.clear(); selChanged(); };
+    // Copy a neighbour's location onto the selection: ordinary manual placements, undoable
+    const placeAt = n => { if (n) change(items.filter(x => sel.has(x.id)), {lat: n.x.lat, lon: n.x.lon}); };
+    $('#placeprev').onclick = () => placeAt(NB.prev);
+    $('#placenext').onclick = () => placeAt(NB.next);
     $('#unset').onclick = () => change(items.filter(x => sel.has(x.id)), {noloc:true});
     $('#archive').onclick = () => change(items.filter(x => sel.has(x.id) && !x.archived), {archive:true});
     $('#restore').onclick = () => change(items.filter(x => sel.has(x.id) && x.archived), {archive:false});
     $('#setcover').onclick = () => { const x = items.find(x => sel.has(x.id)); if (x) setCover(x.rel); };
-    $('#autocover').onclick = () => setCover(null);
+    $('#autocover').onclick = () => { closePops(); setCover(null); };
     $('#moveday').onchange = e => { const k = e.target.value; e.target.value = ''; if (k) change(items.filter(x => sel.has(x.id)), {toDay:k}); };
     const doShift = () => {
       const m = $('#shift').value.trim().match(/^([+-])?(\d{1,3})(?::(\d{1,2}))?$/);
@@ -624,7 +789,7 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
     };
     $('#shiftbtn').onclick = doShift;
     $('#shift').addEventListener('keydown', e => { if (e.key === 'Enter') doShift(); });
-    $('#undo').onclick = () => {
+    const doUndo = () => {
       const batch = undoStack.pop(); if (!batch) return;
       if ('cover' in batch) { coverRel = batch.cover; coverTouched = true; }
       for (const s of batch) {
@@ -635,9 +800,28 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
       items.sort((a,b)=>a.t-b.t); computeDays(); renderChips();
       save(); setDay(curDay, false); renderSummary(); refreshEdit();
     };
+    $('#undo').onclick = doUndo; $('#undotop').onclick = doUndo;
     $('#export').onclick = () => download(fullOverrides(), 'overrides.json');
-    $('#backup').onclick = () => download(fullOverrides(), `overrides-backup-${new Date().toISOString().slice(0,10)}.json`);
-    $('#import').onclick = () => $('#importfile').click();
+    $('#backup').onclick = () => { closePops(); download(fullOverrides(), `overrides-backup-${new Date().toISOString().slice(0,10)}.json`); };
+    $('#import').onclick = () => { closePops(); $('#importfile').click(); };
+    // ⋯ menu and ? help: one open at a time; outside click or Esc closes
+    const pops = [['#morebtn', '#more'], ['#helpbtn', '#help']];
+    function closePops() {
+      let was = false;
+      for (const [b, m] of pops) { if (!$(m).hidden) was = true; $(m).hidden = true; $(b).setAttribute('aria-expanded', 'false'); }
+      return was;
+    }
+    for (const [b, m] of pops) $(b).onclick = () => {
+      const open = $(m).hidden; closePops();
+      $(m).hidden = !open; $(b).setAttribute('aria-expanded', String(open));
+    };
+    addEventListener('pointerdown', e => { if (!e.target.closest('.pop')) closePops(); });
+    $('#follow').checked = follow;
+    $('#follow').onchange = e => {
+      follow = e.target.checked;
+      try { localStorage.setItem(FOLLOW_KEY, follow ? '1' : '0'); } catch(_) {}
+      if (follow) followSel();
+    };
     $('#importfile').onchange = async e => {
       const f = e.target.files[0]; e.target.value = ''; if (!f) return;
       try {
@@ -654,10 +838,16 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
     $('#scan').onclick = () => runBuild('full');
     $('#publish').onclick = () => runBuild('publish');
     addEventListener('keydown', e => {
-      if (lb.classList.contains('open') || ['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName)) return;
-      if (e.key === 'Escape' && sel.size) { sel.clear(); renderStrip(); refreshEdit(); }
-      if (e.key.toLowerCase() === 'a' && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); $(e.shiftKey ? '#restore' : '#archive').click(); }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); $('#undo').click(); }
+      if (lb.classList.contains('open')) return;
+      if (e.key === 'Escape' && closePops()) return;
+      if (['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName)) return;
+      const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
+      if (e.key === 'Escape' && sel.size) { sel.clear(); selChanged(); }
+      if (e.key.toLowerCase() === 'a' && plain) { e.preventDefault(); $(e.shiftKey ? '#restore' : '#archive').click(); }
+      if (e.key === '[' && plain) { e.preventDefault(); $('#placeprev').click(); }
+      if (e.key === ']' && plain) { e.preventDefault(); $('#placenext').click(); }
+      if (e.key === '?' && plain) { e.preventDefault(); $('#helpbtn').click(); }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); doUndo(); }
     });
     addEventListener('beforeunload', e => { if (SERVER && saveTimer && $('#status').textContent === 'Saving…') e.preventDefault(); });
     refreshEdit();

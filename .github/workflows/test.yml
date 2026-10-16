@@ -24,3 +24,12 @@ jobs:
         with:
           node-version: 20
       - run: cd worker && npm test
+
+  viewer:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+      - run: node --test tripmap/tests/test_viewer.mjs

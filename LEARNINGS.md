@@ -42,6 +42,7 @@ Hard-won lessons. Each one: **symptom → cause → fix/rule**. Add new ones her
 | Hidden element still showed | A CSS `display` rule beat the `[hidden]` attribute | Add an explicit `[hidden]{display:none}` rule |
 | Editor changes invisible after a refresh | `serve.py` served `_tripmap/index.html`, a copy of `viewer.html` made at build time | `serve.py` serves the repo's `viewer.html` fresh on every request (`no-store`, also for `trip.js`); the copy is only for `file://` |
 | Day chips stretched tall | Grid rows shared spare height | `grid-template-rows: auto auto 1fr auto` |
+| Editor page scrolled sideways on a phone | A grid's `auto` column grows to its widest child's min-content (the filter row), even when that child scrolls | `grid-template-columns: minmax(0,1fr)` on `#app` |
 
 ## Site / data contract
 

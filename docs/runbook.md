@@ -4,8 +4,9 @@
 | Task | How |
 |---|---|
 | Fix locations / day / time | Double-click `Open Wander Editor.bat` in the trip folder → edit (filters, select, click map, Move to day, Shift time) → **Apply to map** → **Publish** |
-| Add photos/videos | Drop anywhere in the trip folder → **Scan for new files** → **Publish** |
-| Change cover | Select one photo → **Set as cover** → **Apply to map** → **Publish**. Back to the automatic pick: **Automatic cover** → Apply → Publish |
+| Place an unplaced shot | **No location** filter → select it → the map shows the nearest placed shots before and after it, with time gaps → **Place at previous** (`[`) / **Place at next** (`]`), or click the map → **Apply to map** → **Publish** |
+| Add photos/videos | Drop anywhere in the trip folder → ⋯ → **Scan for new files** → **Publish** |
+| Change cover | Select one photo → **Set as cover** → **Apply to map** → **Publish**. Back to the automatic pick: ⋯ → **Automatic cover** → Apply → Publish |
 | Hide a shot | Select → **Archive** (A) → **Apply to map** → **Publish**. Undo: **Archived** filter → select → **Restore** (Shift+A) → Apply → Publish |
 | Check a publish first | `python "C:\Users\jobjo\Github\wander\tripmap\publish.py" "D:\<trip>" --dry-run` → upload count + delete list, nothing changed |
 | Give someone access | `python "C:\Users\jobjo\Github\wander\tripmap\access.py" add <slug> <email>` (or `add all <email>` for `Wander – All trips`). Check with `list <slug>`. Fallback: Zero Trust → Access → Rule groups → add the email |

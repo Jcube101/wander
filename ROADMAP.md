@@ -17,6 +17,7 @@ Size: **S** ≈ an evening, **M** ≈ a weekend, **L** ≈ several sessions. Kno
 - [x] **R2 storage check:** `publish.py` projects the bucket size and warns above 8 GB and 10 GB (never blocks).
 - [x] **Run from the repo:** one-file launcher per trip folder; one-click Apply / Scan / Publish.
 - [x] **Access scripting:** `tripmap/access.py` (setup / add / remove / list) via the Cloudflare API, mirroring the Thailand app; guardrails, never deletes; `/new-trip` applies step 5 after a yes.
+- [x] **Editor toolbar + "where did this happen":** one toolbar row with a ⋯ menu and ? help; a selection bar with only the actions that apply; selecting shows the pin, or the nearest placed shots before/after with time gaps; Place at previous / next (`[` / `]`); Follow selection toggle. Neighbour lookup tested in node (CI).
 
 ## Now
 

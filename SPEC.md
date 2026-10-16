@@ -131,15 +131,23 @@ One cover per trip. It drives the landing card (640 px) and the hero (1600 px).
 
 ### Editor (`serve.py` + `viewer.html?edit`)
 
-- **Filters:** All (not archived) / Needs review (not `gps` or `manual`) / No location / Archived (n).
-- **Archive / Restore** the selection (keys **A** / **Shift+A**). Archived shots can still be placed, moved and re-timed.
-- **Set as cover** (exactly one non-archived photo; otherwise disabled with the reason as its tooltip) / **Automatic cover**. ★ on the cover's strip tile; the summary says `Cover: <file>` or `Cover: automatic`, plus a note if the chosen cover is archived, missing or not a photo.
-- **Select:** click, Shift-click range, double-click to view.
-- **Place:** click map or pin to place the selection; drag a pin; Remove location.
+- **Layout:** one toolbar row: filters left; save status, Apply to map, Publish, ⋯ menu (Scan for new files, Import, Backup, Automatic cover, Select all in view, Follow selection), ? (hints + shortcuts) right. A selection bar appears over the map's bottom edge only while ≥1 shot is selected (the strip never moves) and shows only the actions that apply; the rest are hidden (and disabled, so shortcuts can't fire them). It wraps on narrow screens; the page never scrolls sideways.
+- **Filters:** All (not archived) / Needs review (not `gps` or `manual`) / No location (n) / Archived (n).
+- **Archive / Restore** the selection (keys **A** / **Shift+A**), shown when some selected shot is published / archived. Archived shots can still be placed, moved and re-timed.
+- **Set as cover** (shown only for exactly one non-archived photo that isn't already the cover) / **Automatic cover** (⋯, shown when a cover is chosen). ★ on the cover's strip tile; the summary says `Cover: <file>` or `Cover: automatic`, plus a note if the chosen cover is archived, missing or not a photo.
+- **Select:** click, Shift-click range, double-click to view, Esc clears.
+- **Where it happened** (uses the editor's current, unapplied times and places):
+  - Placed shot(s) selected: zoom to the pin (several: fit them) and highlight.
+  - Otherwise: neighbours = nearest placed, non-archived, unselected shot before the earliest selected shot and after the latest. Shown on the map: the same-day ones if any, else both. Fit to two, centre on one; highlight with gap labels (`−12 min`, `+40 min`, `+1 h 5 min`, `−2 d 3 h`) and a faint dashed line. Status: `Between <file> (−12 min) and <file> (+40 min)`; other-day neighbours get `, Day N`.
+  - Highlights ignore the mouse, so clicking the map or a pin to place, and dragging pins, behave as before.
+  - **Follow selection** (⋯, default on, per browser in `localStorage`): off = selecting never moves the map. The map never moves while the user is dragging it (until its glide ends), holding a pointer on it, or within 0.6 s of a wheel zoom.
+  - Lookup is `TripPure.neighbours` in viewer.html's `<script id="tripmap-pure">` block: one linear pass, tested by `tripmap/tests/test_viewer.mjs`.
+- **Place:** **Place at previous** / **Place at next** (keys **[** / **]**, shown when that neighbour exists) copy its location onto the selection as manual placements (undoable); click map or pin to place the selection; drag a pin; Remove location (shown when a selected shot is placed).
 - **Day/time:** Move to day (keeps clock time), Shift time (`-1:30`, `+2`).
-- **Undo** (Ctrl+Z, also undoes cover changes); every change autosaves to `overrides.json`.
+- **Undo** (Ctrl+Z, also undoes cover changes; button in the selection bar, or in the toolbar when nothing is selected); every change autosaves to `overrides.json`.
 - **Apply to map** (data-only build), **Scan for new files** (full build), **Publish**; one job at a time.
 - **Backup / Import** fixes files.
+- Shortcuts are ignored while typing in a field or while the viewer is open; **?** toggles help; Esc closes the menu/help first, then clears the selection.
 - Server: localhost only, Range support for video. API needs the `X-TripMap: 1` header and refuses foreign Origins.
 
 ### Publish (`tripmap/publish.py`)

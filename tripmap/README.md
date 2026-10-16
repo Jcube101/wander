@@ -46,18 +46,21 @@ The build remembers its options in `_tripmap\build_args.json`, so the editor's b
 
 Double-click **`Open Wander Editor.bat`** in the trip folder. A small window opens and your browser shows the map in edit mode at `http://127.0.0.1:8765/index.html?edit`. Keep the window open while you edit. The page is reachable only from your own computer.
 
-- **Filter:** All / Needs review (estimated or unplaced) / No location / Archived.
-- **Set as cover** (one photo selected) / **Automatic cover**: the trip's landing card and hero. ★ marks it in the strip.
-- **Archive / Restore** (A / Shift+A): hide shots from the published trip. They stay here, dimmed, and their previews are removed from R2 on the next Publish.
-- **Select:** click shots in the strip, Shift-click for a range, double-click to view.
-- **Location:** click the map or a pin to place the selection; drag a pin to move one; "Remove location" takes shots off the map.
+The toolbar under the map has the filters on the left; on the right, the save status, **Apply to map**, **Publish**, a **⋯** menu (Scan for new files, Import, Backup, Automatic cover, Select all in view, Follow selection) and **?** (hints and shortcuts). Selecting shots brings up a selection bar over the bottom of the map with only the actions that apply to them.
+
+- **Filter:** All / Needs review (estimated or unplaced) / No location (n) / Archived (n).
+- **Select:** click shots in the strip, Shift-click for a range, double-click to view. Esc clears.
+- **Where did this happen?** Selecting a placed shot zooms to its pin and highlights it. Selecting an unplaced one shows the nearest placed shots before and after it (same day preferred), with the time gap on each ("−12 min", "+40 min") and a dashed line between them; the selection bar says "Between … and …", and mentions it when a neighbour is on another day. With several shots selected, the earliest one's previous and the latest one's next neighbour count. Turn off **Follow selection** (⋯ menu, remembered in this browser) to keep the map still; it never moves while you're dragging it.
+- **Location:** **Place at previous** / **Place at next** (`[` / `]`) copy that neighbour's location onto the selection. Or click the map or a pin to place the selection; drag a pin to move one; "Remove location" takes shots off the map.
 - **Day and time:** "Move to day…" (keeps the clock time) or "Shift time" (e.g. `-1:30`, `+2`).
-- **Undo:** Ctrl+Z.
+- **Set as cover** (exactly one published photo) / **Automatic cover** (⋯ menu): the trip's landing card and hero. ★ marks it in the strip.
+- **Archive / Restore** (A / Shift+A): hide shots from the published trip. They stay here, dimmed, and their previews are removed from R2 on the next Publish.
+- **Undo:** Ctrl+Z, or the Undo button (in the selection bar, or the toolbar when nothing is selected).
 - Every change saves to `overrides.json` in the trip folder (previous version: `overrides.bak.json`).
 - **Apply to map:** bakes fixes into the map in seconds.
-- **Scan for new files:** builds previews for anything added to the trip folder.
+- **Scan for new files** (⋯): builds previews for anything added to the trip folder.
 - **Publish:** uploads to R2 (see below).
-- **Backup / Import:** download or merge a fixes file.
+- **Backup / Import** (⋯): download or merge a fixes file.
 
 ## Publishing
 
