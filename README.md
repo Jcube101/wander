@@ -28,6 +28,8 @@ copy "$W\Open Wander Editor.bat" "D:\<trip>\"
 double-click D:\<trip>\Open Wander Editor.bat
 ```
 
+New trip with Claude Code: `/new-trip "D:\<trip>" "<Title>" +HH:MM` (follows [`docs/runbook.md`](docs/runbook.md) → New trip).
+
 Worker: `cd worker && npm test && npx wrangler deploy`
 
 Project docs: [`SPEC.md`](SPEC.md) (what it must do), [`ROADMAP.md`](ROADMAP.md), [`LEARNINGS.md`](LEARNINGS.md) (gotchas).

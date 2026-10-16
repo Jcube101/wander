@@ -21,9 +21,12 @@ The website itself is NOT in this repo: it's the Lovable project synced to `Jcub
 ## Data contract
 `docs/data-contract.md` is the interface between `tripmap/` (producer) and the Lovable site (consumer). Changing a field means updating that doc and sending Lovable a prompt.
 
+## Adding a trip
+Use `/new-trip`, which follows `docs/runbook.md` → New trip.
+
 ## Testing
 - Worker: `cd worker && npm test` (node, mocked R2 bucket).
-- tripmap: no automated tests yet (see `ROADMAP.md`); was verified against a fixture trip folder with a stubbed exiftool/rclone.
+- tripmap: `python -m unittest discover tripmap/tests` (only the publish Access guard so far; full suite is on `ROADMAP.md`). The rest was verified against a fixture trip folder with a stubbed exiftool/rclone.
 
 ## Project docs
 - `SPEC.md` — what Wander must do (requirements, non-goals). `ROADMAP.md` — Now / Next / Later.

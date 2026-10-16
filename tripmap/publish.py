@@ -8,6 +8,9 @@ Publish a built trip to Cloudflare R2 (or any rclone remote).
 Uploads <trip>/_tripmap to <remote>/<slug>/ and updates <remote>/trips.json,
 the list of trips the Wander site shows on its home page.
 
+Refuses to publish unless Cloudflare Access already guards the trip, so a new
+trip is never briefly public (--allow-unprotected skips this check).
+
 Order matters so the site never points at files that aren't there yet:
   1. thumbnails, gallery images, previews (cached by browsers for a week)
   2. trip.json                             (never cached, so fixes show at once)
@@ -15,6 +18,7 @@ Order matters so the site never points at files that aren't there yet:
 Only new or changed files are sent.
 """
 import argparse
+import http.client
 import json
 import shutil
 import subprocess
@@ -28,6 +32,10 @@ NOCACHE = "Cache-Control: no-cache"
 DATA_FILES = ("trip.json",)
 # Never uploaded: local editor files (trip.js holds local folder paths) and build leftovers
 PRIVATE = ("trip.js", "index.html", "build_args.json", "build_errors.txt", "*.part.mp4")
+MEDIA_HOST = "media.job-joseph.com"
+# What Access answers a visitor without a cookie. The Worker itself never
+# redirects or refuses trip.json, so these mean the trip's Access app exists.
+PROTECTED = (302, 401, 403)
 
 
 def log(msg):
@@ -53,11 +61,27 @@ def rclone(*args, stdin=None, capture=False):
     return p.wait(), "", last_err
 
 
+def check_protected(slug, host=MEDIA_HOST, timeout=15):
+    """Ask for the trip's data as a stranger would (no cookies, no redirects).
+    Returns (protected, status); status is the HTTP code or the error text."""
+    conn = http.client.HTTPSConnection(host, timeout=timeout)
+    try:
+        conn.request("GET", f"/{slug}/trip.json", headers={"User-Agent": "wander-publish"})
+        status = conn.getresponse().status
+    except (OSError, http.client.HTTPException) as e:
+        return False, f"{type(e).__name__}: {e}"
+    finally:
+        conn.close()
+    return status in PROTECTED, status
+
+
 def main():
     ap = argparse.ArgumentParser(description="Publish a built trip to R2 via rclone.")
     ap.add_argument("trip", nargs="?", default=None, help="Trip folder (default: the folder containing TripMap)")
     ap.add_argument("--remote", default="r2:trip-media", help="rclone remote and bucket (default r2:trip-media)")
     ap.add_argument("--transfers", type=int, default=16, help="Files uploaded in parallel (default 16)")
+    ap.add_argument("--allow-unprotected", action="store_true",
+                    help="Publish even if no Cloudflare Access app guards this trip yet")
     args = ap.parse_args()
 
     if not shutil.which("rclone"):
@@ -71,6 +95,16 @@ def main():
     slug = trip.get("slug")
     if not slug:
         sys.exit("trip.json has no slug. Re-run the build.")
+    if args.allow_unprotected:
+        log(f"WARNING: skipping the Access check; {slug} may be visible to anyone.")
+    else:
+        protected, status = check_protected(slug)
+        if not protected:
+            how = f"got {status}" if isinstance(status, int) else f"couldn't check: {status}"
+            sys.exit(f"ERROR: {slug} isn't protected by Cloudflare Access ({how}). "
+                     f"Create the Access app for {slug} first, see docs/runbook.md"
+                     f"{'' if isinstance(status, int) else ' (or use --allow-unprotected)'}")
+        log(f"Access check: {slug} is protected ({status}).")
     remote = args.remote.rstrip("/")
     dst = f"{remote}/{slug}"
     stats = ["--stats", "3s", "--stats-one-line", "--stats-log-level", "NOTICE"]

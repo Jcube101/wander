@@ -115,6 +115,8 @@ Order matters so the site never points at missing files:
 2. `rclone copy` `trip.json`, `no-cache`.
 3. Copy covers to `public/covers/` (640 px card + 1600 px hero when the cover is a photo), merge this trip into `trips.json` (newest first, `no-cache`).
 
+Before step 1, it requests `<slug>/trip.json` with no cookies and follows no redirects. Only 302/401/403 (Access) counts as protected; anything else, or a network error, stops the publish. `--allow-unprotected` skips this (terminal only; the editor never passes it).
+
 Never uploaded: `trip.js`, `index.html`, `build_args.json`, `build_errors.txt`, `*.part.mp4`. Every rclone call has `--s3-no-check-bucket`.
 
 ### Worker (`worker/src/index.js`)

@@ -8,6 +8,7 @@ Hard-won lessons. Each one: **symptom → cause → fix/rule**. Add new ones her
 |---|---|---|
 | Worker route and Access on `wander.` did nothing | `wander.job-joseph.com` is an A record to Lovable's own Cloudflare account; no O2O for A records, so this zone's Workers/Access never run | Lock the media host (`media.`) instead; keep `wander.` DNS-only |
 | Risk: Access allows a path the Worker reads differently | Encoded or odd paths (`%2F`, `..`, `//`) can be normalised differently by each | Worker refuses any `%`, `..`, `//`; keys used exactly as sent |
+| Publishing before the Access app existed made the trip public | Access is the only gate; without an app the Worker serves the trip to anyone | `publish.py` refuses to publish an unprotected trip (Access app first, then Publish) |
 | Trip page loads but images are blank | `crossorigin` on `<img>`/`<video>` makes the browser drop the Access cookie | Never put `crossorigin` on media tags |
 | Site change "didn't work" | Lovable edits only reach the live domain after publishing | Re-publish in Lovable after every change |
 

@@ -26,7 +26,7 @@ Size: **S** ≈ an evening, **M** ≈ a weekend, **L** ≈ several sessions. Kno
 |---|---|---|---|
 | Archive button in the editor | Hide a shot from the published trip without deleting it; stays local | M | New `overrides.json` field; build filter; data-contract note |
 | Choose the trip cover in edit mode | Auto pick (middle placed photo) isn't always the best | S | Trip-level setting in `overrides.json`; publish already handles covers |
-| Script Access groups/apps via the Cloudflare API | Onboarding is manual clicking in Zero Trust | M | API token kept outside the repo |
+| Script Access groups/apps via the Cloudflare API | Onboarding is manual clicking in Zero Trust; would let `/new-trip` do runbook step 5 too | M | API token kept outside the repo |
 | Batch "new trip" bootstrap command | Build + launcher + publish + Access in one go | M | Access scripting |
 
 ## Later

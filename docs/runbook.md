@@ -12,11 +12,27 @@
 | Change the Worker | `cd worker && npm test && npx wrangler deploy` |
 
 ## New trip
-1. `python "C:\Users\jobjo\Github\wander\tripmap\build.py" "D:\<trip>" --name "<Title>" --tz +HH:MM` (add `--camera-offset` if a DJI clock is off; `--quick` first for a fast look).
-2. Copy `tripmap\Open Wander Editor.bat` into the trip folder.
-3. Fix things in edit mode → Apply to map → **Publish** (creates `<slug>/`, updates `trips.json` + cover).
-4. Zero Trust: create rule group `Wander – <Trip> crew`; add self-hosted app `Wander – <Trip>` with destinations `media.job-joseph.com/<slug>` and `media.job-joseph.com/auth/<slug>`; Allow policy = crew OR All trips; One-time PIN; App Launcher off.
-5. Incognito test: lock on the landing card → Sign in → photos load.
+The Access app must exist **before** Publish; Access is the only gate. In Claude Code, `/new-trip` runs steps 1–3 and hands you a checklist for 4–7.
+
+`<Title>` e.g. `Bali 2027` → `<slug>` `bali-2027`; `<Trip>` = short name, e.g. `Bali`.
+
+1. **Preflight**
+   - `python`, `exiftool`, `ffmpeg`, `rclone` all on PATH; `python -c "import PIL"` works.
+   - Slug is new: `rclone cat r2:trip-media/trips.json --s3-no-check-bucket` must not list `<slug>` (unless you mean to republish it).
+2. **Quick build**
+   `python "C:\Users\jobjo\Github\wander\tripmap\build.py" "D:\<trip>" --name "<Title>" --tz +HH:MM --quick` (add `--camera-offset +HH:MM` for a DJI clock).
+   Check: item count, how many have no location, `build_errors.txt`, DJI clips found, and whether the camera offset looks right (DJI clip times vs nearby phone photo times). Wrong offset → re-run with a corrected `--camera-offset`. The options are saved in `_tripmap\build_args.json`, so the editor's Scan reuses them.
+3. **Launcher:** copy `tripmap\Open Wander Editor.bat` into the trip folder.
+4. **Edit + full build:** double-click the launcher → fix things → **Apply to map** → **Scan for new files** (the full build; can take hours).
+5. **Access** (Zero Trust):
+   - Rule group `Wander – <Trip> crew` with the crew's emails.
+   - Self-hosted app `Wander – <Title>`, destinations `media.job-joseph.com/<slug>` and `media.job-joseph.com/auth/<slug>`.
+   - Allow policy `Wander – <Trip> viewers` = `Wander – <Trip> crew` OR `Wander – All trips`.
+   - One-time PIN login; App Launcher off.
+6. **Publish** from the editor. `publish.py` refuses if step 5 is missing.
+7. **Check**
+   - `curl -sI https://media.job-joseph.com/<slug>/trip.json` → 302/401/403. **Never 200.**
+   - Incognito: lock on the landing card → Sign in → photos load.
 
 ## Setup facts
 - Bucket `trip-media` (R2), no public domain. rclone remote `r2` (key = Object Read & Write, this bucket only).
@@ -25,6 +41,7 @@
 - Zero Trust team `yellow-night-d03a`. Rule groups: `Wander – All trips`, `Wander – Thailand crew`. App `Wander – Thailand 2026`, policy `Wander – Thailand viewers`.
 
 ## Troubleshooting
+- **Publish: "isn't protected by Cloudflare Access"** → create the trip's Access app (New trip, step 5), or fix its destinations. `--allow-unprotected` skips the check (terminal only).
 - **Publish: `CreateBucket ... 403`** → an rclone call is missing `--s3-no-check-bucket`.
 - **Site shows "This trip is private" for someone who should see it** → check their exact email in the rule group; ask them to sign out (`media.job-joseph.com/cdn-cgi/access/logout`) and back in.
 - **Images missing but trip loads** → something added `crossorigin` to `<img>`/`<video>` in the site.
