@@ -58,6 +58,13 @@ test("public trip list: anyone, and the site with credentials", async () => {
   assert.equal(res.headers.get("access-control-allow-credentials"), "true");
 });
 
+test("query strings are ignored: cover ?v= serves the same object", async () => {
+  const { res, body } = await call("/public/covers/thailand-2026.jpg?v=0123abcdef");
+  assert.equal(res.status, 200);
+  assert.equal(body, "COVER");
+  assert.equal((await call("/thailand-2026/trip.js?v=1")).res.status, 404); // still refused
+});
+
 test("protected trip data is private-cached and only CORS-readable by the site", async () => {
   let { res } = await call("/thailand-2026/trip.json", fromSite());
   assert.equal(res.status, 200);

@@ -11,6 +11,7 @@ Size: **S** ≈ an evening, **M** ≈ a weekend, **L** ≈ several sessions. Kno
 - [x] **Lovable site:** landing + trip pages, gallery, map, timeline, viewer, play journey.
 - [x] **Stale bucket objects removed:** early-publish `trip.js` / `index.html` deleted from R2.
 - [x] **Archive in the editor:** hide shots from the published trip (removed from R2), kept locally; Restore puts them back.
+- [x] **Choose the cover in the editor:** Set as cover / Automatic cover; stored as `settings.cover` in `overrides.json`; `?v=` so a new cover shows at once.
 - [x] **GitHub Actions:** tripmap and Worker tests on every push to main.
 - [x] **R2 storage check:** `publish.py` projects the bucket size and warns above 8 GB and 10 GB (never blocks).
 - [x] **Run from the repo:** one-file launcher per trip folder; one-click Apply / Scan / Publish.
@@ -25,7 +26,6 @@ Size: **S** ≈ an evening, **M** ≈ a weekend, **L** ≈ several sessions. Kno
 
 | Item | Why | Size | Depends on |
 |---|---|---|---|
-| Choose the trip cover in edit mode | Auto pick (middle placed photo) isn't always the best | S | Trip-level setting in `overrides.json`; publish already handles covers |
 | Script Access groups/apps via the Cloudflare API | Onboarding is manual clicking in Zero Trust; would let `/new-trip` do runbook step 5 too | M | API token kept outside the repo |
 | Batch "new trip" bootstrap command | Build + launcher + publish + Access in one go | M | Access scripting |
 

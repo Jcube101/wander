@@ -63,7 +63,7 @@ class FakeRclone:
     def __init__(self, remote=(), fail=(), bucket=0):
         self.remote = dict(remote) if isinstance(remote, dict) else {p: 1 for p in remote}
         self.fail, self.bucket = set(fail), bucket
-        self.steps, self.lists = [], {}
+        self.steps, self.lists, self.calls, self.stdin = [], {}, [], {}
 
     def __call__(self, *args, stdin=None, capture=False):
         args = list(args)
@@ -73,6 +73,9 @@ class FakeRclone:
         if "--files-from" in args:
             self.lists[cmd] = Path(args[args.index("--files-from") + 1]).read_text(encoding="utf-8").split()
         self.steps.append(cmd)
+        self.calls.append(args)
+        if stdin is not None:
+            self.stdin[cmd] = stdin
         if cmd in self.fail:
             return 1, "", "boom"
         if cmd == "lsf":
@@ -98,7 +101,7 @@ class Publish(unittest.TestCase):
             x = {"id": f"i{i}", "type": "photo", "thumb": f"thumbs/i{i}.jpg",
                  "card": f"cards/i{i}.jpg", "media": f"media/i{i}.jpg"}
             for k in ("thumb", "card", "media"):
-                (self.out / x[k]).write_bytes(b"x")
+                (self.out / x[k]).write_bytes(x[k].encode())  # unique bytes per file
             items.append(x)
         trip = {"slug": "bali-2027", "title": "Bali 2027", "cover": "cards/i0.jpg",
                 "items": items, "days": [], "counts": {"items": self.N}}
@@ -245,6 +248,52 @@ class Publish(unittest.TestCase):
         self.assertIsNone(code)
         self.assertEqual(rc.steps, ["lsf", "size"])
         self.assertIn("would STOP", out)
+
+    # --- cover
+    def set_cover(self, card):
+        tj = self.out / "trip.json"
+        trip = json.loads(tj.read_text())
+        trip["cover"] = card
+        tj.write_text(json.dumps(trip))
+
+    def landing(self, rc):
+        entry = json.loads(rc.stdin["rcat"])["trips"][0]
+        uploads = {c[2].split("/", 1)[1]: Path(c[1]).relative_to(self.out.resolve()).as_posix()
+                   for c in rc.calls if c[0] == "copyto"}
+        return entry, uploads
+
+    def test_cover_files_come_from_the_chosen_shot(self):
+        self.set_cover("cards/i3.jpg")
+        rc = FakeRclone(remote=self.refs)
+        self.assertIsNone(self.run_main(rc)[0])
+        entry, uploads = self.landing(rc)
+        self.assertEqual(uploads, {"public/covers/bali-2027-card.jpg": "cards/i3.jpg",
+                                   "public/covers/bali-2027.jpg": "media/i3.jpg"})
+        v_card = publish.version(self.out / "cards/i3.jpg")
+        v_big = publish.version(self.out / "media/i3.jpg")
+        self.assertEqual(entry["cover"], f"public/covers/bali-2027-card.jpg?v={v_card}")
+        self.assertEqual(entry["coverImage"], f"public/covers/bali-2027.jpg?v={v_big}")
+        self.assertRegex(v_card, r"^[0-9a-f]{10}$")
+
+    def test_cover_version_changes_only_with_the_cover(self):
+        def publish_with(card):
+            self.set_cover(card)
+            rc = FakeRclone(remote=self.refs)
+            self.run_main(rc)
+            return self.landing(rc)[0]
+        a, again, b = publish_with("cards/i3.jpg"), publish_with("cards/i3.jpg"), publish_with("cards/i7.jpg")
+        self.assertEqual((a["cover"], a["coverImage"]), (again["cover"], again["coverImage"]))
+        self.assertNotEqual(a["cover"], b["cover"])
+        self.assertNotEqual(a["coverImage"], b["coverImage"])
+        self.assertEqual(a["cover"].split("?")[0], b["cover"].split("?")[0])  # same R2 key
+
+    def test_cover_without_big_image_uses_card_for_both(self):
+        (self.out / "media" / "i0.jpg").unlink()
+        rc = FakeRclone(remote=self.refs)
+        self.run_main(rc)
+        entry, uploads = self.landing(rc)
+        self.assertEqual(list(uploads), ["public/covers/bali-2027-card.jpg"])
+        self.assertEqual(entry["cover"], entry["coverImage"])
 
     # --- R2 storage check
     def test_storage_line_in_dry_run(self):

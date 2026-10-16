@@ -178,15 +178,29 @@ def make_handler(root: Path, out: Path, build: Build, port_ref):
                 ov = body.get("overrides")
                 if not isinstance(ov, dict):
                     return self._text("expected {overrides: {...}}", 400)
+                new = body.get("settings", {})
+                if not isinstance(new, dict):
+                    return self._text("settings must be an object", 400)
                 f = root / "overrides.json"
+                settings = {}
                 if f.exists():
                     try:
                         (root / "overrides.bak.json").write_bytes(f.read_bytes())
                     except OSError:
                         pass
+                    try:
+                        old = json.loads(f.read_text(encoding="utf-8")).get("settings")
+                        settings = dict(old) if isinstance(old, dict) else {}
+                    except (OSError, ValueError, AttributeError):
+                        pass
+                # Trip-level settings (e.g. the chosen cover) are kept unless the POST
+                # names them; clearing one is explicit: {"settings": {"cover": null}}.
+                settings.update(new)
+                settings = {k: v for k, v in settings.items() if v is not None}
                 tmp = f.with_suffix(".tmp")
                 tmp.write_text(json.dumps({"version": 2, "trip": body.get("trip"),
-                                           "saved": time.strftime("%Y-%m-%dT%H:%M:%S"), "overrides": ov},
+                                           "saved": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                                           "settings": settings, "overrides": ov},
                                           indent=1), encoding="utf-8")
                 os.replace(tmp, f)
                 return self._json({"ok": True, "count": len(ov)})

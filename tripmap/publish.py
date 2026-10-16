@@ -22,6 +22,7 @@ disk. Order matters so the site never points at files that aren't there yet:
 Only new or changed files are sent.
 """
 import argparse
+import hashlib
 import http.client
 import json
 import os
@@ -138,6 +139,11 @@ def storage_report(now, upload_bytes, delete_bytes):
 
 def too_many_deletes(deletes, remote_files):
     return bool(remote_files) and len(deletes) / len(remote_files) > MAX_DELETE_SHARE
+
+
+def version(path):
+    """Short content hash for a cover URL's ?v=."""
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()[:10]
 
 
 def write_list(paths):
@@ -281,16 +287,20 @@ def main():
     cover_item = next((x for x in trip.get("items", []) if x.get("card") == trip.get("cover")), None)
     cover, cover_image = None, None
     if trip.get("cover") and (out / trip["cover"]).exists():
-        cover = f"public/covers/{slug}-card.jpg"
+        card = out / trip["cover"]
         big = out / cover_item["media"] if cover_item and cover_item.get("type") == "photo" and cover_item.get("media") else None
-        cover_image = f"public/covers/{slug}.jpg" if big and big.exists() else cover
-        for local, remote_key in ((out / trip["cover"], cover), (big, cover_image)):
-            if local is None or remote_key is None or not local.exists():
-                continue
+        sources = {f"public/covers/{slug}-card.jpg": card}
+        if big and big.exists():
+            sources[f"public/covers/{slug}.jpg"] = big
+        for remote_key, local in sources.items():
             code, _, err = rclone("copyto", str(local), f"{remote}/{remote_key}",
                                   "--header-upload", "Cache-Control: public, max-age=3600", capture=True)
             if code:
                 sys.exit(f"Couldn't upload the cover image: {err.strip()[:300]}")
+        # The cover keys never change, so a ?v= of the image makes a new cover
+        # show at once instead of after the hour's cache (the Worker ignores queries).
+        urls = [f"{k}?v={version(v)}" for k, v in sources.items()]
+        cover, cover_image = urls[0], urls[-1]
     trips.append({
         "slug": slug,
         "title": trip.get("title"),

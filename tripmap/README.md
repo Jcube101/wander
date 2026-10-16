@@ -46,6 +46,7 @@ The build remembers its options in `_tripmap\build_args.json`, so the editor's b
 Double-click **`Open Wander Editor.bat`** in the trip folder. A small window opens and your browser shows the map in edit mode at `http://127.0.0.1:8765/index.html?edit`. Keep the window open while you edit. The page is reachable only from your own computer.
 
 - **Filter:** All / Needs review (estimated or unplaced) / No location / Archived.
+- **Set as cover** (one photo selected) / **Automatic cover**: the trip's landing card and hero. ★ marks it in the strip.
 - **Archive / Restore** (A / Shift+A): hide shots from the published trip. They stay here, dimmed, and their previews are removed from R2 on the next Publish.
 - **Select:** click shots in the strip, Shift-click for a range, double-click to view.
 - **Location:** click the map or a pin to place the selection; drag a pin to move one; "Remove location" takes shots off the map.

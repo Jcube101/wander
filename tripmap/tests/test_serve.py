@@ -1,6 +1,7 @@
 """Tests for serve.py: the editor page comes from the repo, not the build-time
 copy in _tripmap/. Run: python -m unittest discover tripmap/tests"""
 import http.client
+import json
 import sys
 import tempfile
 import threading
@@ -13,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import serve  # noqa: E402
 
 
-class ServesRepoViewer(unittest.TestCase):
+class LocalServer(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -41,6 +42,8 @@ class ServesRepoViewer(unittest.TestCase):
         finally:
             conn.close()
 
+
+class ServesRepoViewer(LocalServer):
     def test_index_and_root_serve_repo_viewer(self):
         for path in ("/index.html?edit", "/index.html", "/"):
             with self.subTest(path=path):
@@ -62,6 +65,41 @@ class ServesRepoViewer(unittest.TestCase):
     def test_other_files_still_from_bundle(self):
         status, cc, body = self.get("/thumbs/a.jpg")
         self.assertEqual((status, cc, body), (200, "no-cache", b"jpg"))
+
+
+class SavesSettings(LocalServer):
+    """Trip-level settings (the chosen cover) survive saves that don't mention them."""
+
+    def post(self, body):
+        conn = http.client.HTTPConnection("127.0.0.1", self.server.server_address[1], timeout=5)
+        try:
+            conn.request("POST", "/api/overrides", json.dumps(body), {"X-TripMap": "1"})
+            r = conn.getresponse()
+            r.read()
+            return r.status
+        finally:
+            conn.close()
+
+    def saved(self, name="overrides.json"):
+        return json.loads((Path(self.tmp.name) / name).read_text(encoding="utf-8"))
+
+    def test_post_without_settings_keeps_the_existing_cover(self):
+        self.assertEqual(self.post({"trip": "T", "overrides": {}, "settings": {"cover": "a/p1.jpg"}}), 200)
+        self.assertEqual(self.post({"trip": "T", "overrides": {"a/p2.jpg": {"archived": True}}}), 200)
+        f = self.saved()
+        self.assertEqual(f["settings"], {"cover": "a/p1.jpg"})
+        self.assertEqual(f["overrides"], {"a/p2.jpg": {"archived": True}})
+        self.assertEqual(self.saved("overrides.bak.json")["settings"], {"cover": "a/p1.jpg"})  # .bak still written
+
+    def test_clearing_is_explicit(self):
+        self.post({"overrides": {}, "settings": {"cover": "a/p1.jpg"}})
+        self.post({"overrides": {}, "settings": {}})  # names nothing: kept
+        self.assertEqual(self.saved()["settings"], {"cover": "a/p1.jpg"})
+        self.post({"overrides": {}, "settings": {"cover": None}})
+        self.assertEqual(self.saved()["settings"], {})
+
+    def test_bad_settings_refused(self):
+        self.assertEqual(self.post({"overrides": {}, "settings": "a/p1.jpg"}), 400)
 
 
 if __name__ == "__main__":

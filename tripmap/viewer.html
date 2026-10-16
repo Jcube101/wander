@@ -61,6 +61,7 @@ main{position:relative;min-height:0}
 .badge{position:absolute;right:3px;bottom:3px;background:rgba(0,0,0,.65);color:#fff;font-size:10px;
   border-radius:4px;padding:0 4px;line-height:15px}
 .badge.nl{left:3px;right:auto;background:var(--warn)}
+.badge.cv{top:2px;bottom:auto;left:50%;right:auto;transform:translateX(-50%);background:#d9a400}
 .pin{width:46px;height:46px;border-radius:10px;overflow:hidden;border:2px solid #fff;box-shadow:var(--shadow);
   background:#ccc;position:relative}
 .pin img{width:100%;height:100%;object-fit:cover;display:block}
@@ -153,6 +154,8 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
     <button class="btn" id="unset" title="Take selected shots off the map">Remove location</button>
     <button class="btn" id="archive" title="Hide selected shots from the published trip; they stay here (A)">Archive</button>
     <button class="btn" id="restore" title="Put selected archived shots back in the published trip (Shift+A)">Restore</button>
+    <button class="btn" id="setcover">Set as cover</button>
+    <button class="btn" id="autocover" title="Let the build pick the cover again">Automatic cover</button>
     <select id="moveday" title="Move selected shots to another day (keeps their clock time)"><option value="">Move to day…</option></select>
     <input id="shift" placeholder="+1:30" title="Shift selected shots' time, e.g. -0:45 or +2">
     <button class="btn" id="shiftbtn">Shift time</button>
@@ -211,9 +214,13 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
   const LSKEY = 'tripmap-edits:' + T.title;
   const norm = v => v === null ? {noloc:true} : (v && typeof v === 'object' ? v : null);
   let edits = {};
+  // trip-level settings: the chosen cover (rel path) or null = automatic.
+  // Only sent once changed here, so a failed load can never clear it on disk.
+  const bakedCover = T.coverRel || null;
+  let coverRel = bakedCover, coverTouched = false;
   if (EDIT) {
-    if (SERVER) { try { const r = await api('/api/overrides'); const j = await r.json(); edits = j.overrides || {}; } catch(_) {} }
-    else { try { edits = JSON.parse(localStorage.getItem(LSKEY)) || {}; } catch(_) {} }
+    if (SERVER) { try { const r = await api('/api/overrides'); const j = await r.json(); edits = j.overrides || {}; coverRel = (j.settings||{}).cover || null; } catch(_) {} }
+    else { try { edits = JSON.parse(localStorage.getItem(LSKEY)) || {}; const c = localStorage.getItem(LSKEY+':cover'); if (c !== null) coverRel = c || null; } catch(_) {} }
     for (const k of Object.keys(edits)) { const v = norm(edits[k]); if (v) edits[k] = v; else delete edits[k]; }
   }
   const baked = new Map(items.map(x => [x.id, {lat:x.lat, lon:x.lon, loc:x.loc, t:x.t, archived:!!x.archived}]));
@@ -231,7 +238,7 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
   const pendingCount = () => items.filter(x => {
     const b = baked.get(x.id);
     return b.lat !== x.lat || b.lon !== x.lon || b.t !== x.t || (b.loc === 'cleared') !== (x.loc === 'cleared') || b.archived !== !!x.archived;
-  }).length;
+  }).length + (coverRel !== bakedCover ? 1 : 0);
 
   // ---- time formatting in the trip's zone (fixed offset)
   const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -258,7 +265,14 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
     const vis = items.filter(x=>!x.archived), nA = items.length - vis.length;
     const nV = vis.filter(x=>x.type==='video').length, nP = vis.length-nV, nPl = vis.filter(x=>x.lat!=null).length;
     $('#summary').textContent = `${DAYS.filter(d=>d.count).length} days · ${nP} photos · ${nV} videos · ${nPl} on map`
-      + (EDIT ? `${nA ? ` · ${nA} archived` : ''} · editing` : '');
+      + (EDIT ? `${nA ? ` · ${nA} archived` : ''} · ${coverNote()} · editing` : '');
+  }
+  // Mirrors build.py: a chosen cover that's missing, a video or archived falls back to automatic
+  function coverNote() {
+    if (!coverRel) return 'Cover: automatic';
+    const c = items.find(x => x.rel === coverRel), name = c ? c.orig : coverRel.split('/').pop();
+    const why = !c ? 'missing' : c.type !== 'photo' ? 'not a photo' : c.archived ? 'archived' : '';
+    return `Cover: ${name}${why ? ` (cover ${why}, using automatic${why === 'archived' ? ' until restored' : ''})` : ''}`;
   }
   renderSummary();
 
@@ -375,6 +389,7 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
         (x.type==='video'?`<span class="badge">▶ ${dur(x.dur)}</span>`:'') +
         (x.lat==null?`<span class="badge nl" title="No location">?</span>`:'') +
         (x.archived?`<span class="badge ar" title="Not published">Archived</span>`:'') +
+        (EDIT && x.rel === coverRel ? `<span class="badge cv" title="Trip cover">★</span>` : '') +
         (EDIT && (x.loc==='manual' || x.tsrc==='manual') ? `<span class="dot manual" title="Fixed by you"></span>` :
          EDIT && x.lat!=null && x.loc!=='gps' ? `<span class="dot est" title="Estimated location"></span>` : '');
       b.onclick = (e) => EDIT ? toggleSel(x.id, e.shiftKey) : openLb(x.id);
@@ -484,16 +499,24 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
     sel.clear(); save(); setDay(curDay, false); renderSummary(); refreshEdit();
   }
   function placeSelected(ll) { change(items.filter(x => sel.has(x.id)), {lat:+ll.lat.toFixed(6), lon:+ll.lng.toFixed(6)}); }
+  // An undo entry with no shots, only the previous cover
+  function setCover(rel) {
+    if (rel === coverRel) return;
+    undoStack.push(Object.assign([], {cover: coverRel}));
+    coverRel = rel; coverTouched = true;
+    afterChange(false);
+  }
 
   // saving: to disk via the helper, else browser storage
   let saveTimer = null;
+  const payload = () => JSON.stringify({version:2, trip:T.title, overrides: edits, ...(coverTouched ? {settings:{cover: coverRel}} : {})});
   function save() {
-    if (!SERVER) { try { localStorage.setItem(LSKEY, JSON.stringify(edits)); } catch(_) {} return; }
+    if (!SERVER) { try { localStorage.setItem(LSKEY, JSON.stringify(edits)); if (coverTouched) localStorage.setItem(LSKEY+':cover', coverRel || ''); } catch(_) {} return; }
     clearTimeout(saveTimer);
     status('Saving…');
     saveTimer = setTimeout(async () => {
       try {
-        const r = await api('/api/overrides', {method:'POST', body: JSON.stringify({version:2, trip:T.title, overrides: edits})});
+        const r = await api('/api/overrides', {method:'POST', body: payload()});
         if (!r.ok) throw new Error(await r.text());
         status('Saved', 'ok');
       } catch(e) { status('Not saved — is the TripMap window still open?', 'err'); }
@@ -511,6 +534,12 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
     const picked = items.filter(x => sel.has(x.id));
     $('#archive').disabled = !picked.some(x => !x.archived);
     $('#restore').disabled = !picked.some(x => x.archived);
+    const one = picked.length === 1 ? picked[0] : null;
+    const noCover = !one ? 'Select exactly one photo' : one.type !== 'photo' ? "Videos can't be the cover"
+                  : one.archived ? "Archived shots can't be the cover" : one.rel === coverRel ? 'Already the cover' : '';
+    $('#setcover').disabled = !!noCover;
+    $('#setcover').title = noCover || 'Use this photo for the landing card and the trip hero';
+    $('#autocover').disabled = !coverRel;
     const nA = items.filter(x => x.archived).length; $('#narch').textContent = nA ? `(${nA})` : '';
     $('#undo').disabled = !undoStack.length;
     const p = pendingCount(), d = $('#dirty');
@@ -533,7 +562,7 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
       if (x.archived) e.archived = true;
       if (Object.keys(e).length) out[x.rel] = e;
     }
-    return {version:2, trip:T.title, exported:new Date().toISOString(), overrides:out};
+    return {version:2, trip:T.title, exported:new Date().toISOString(), ...(coverRel ? {settings:{cover: coverRel}} : {}), overrides:out};
   }
 
   async function runBuild(mode) {
@@ -542,7 +571,7 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
     for (const id of ['apply','scan','publish']) $('#'+id).disabled = true;
     try {
       clearTimeout(saveTimer);
-      await api('/api/overrides', {method:'POST', body: JSON.stringify({version:2, trip:T.title, overrides: edits})});
+      await api('/api/overrides', {method:'POST', body: payload()});
       const r = await api('/api/build', {method:'POST', body: JSON.stringify({mode})});
       if (!r.ok) throw new Error(await r.text());
       for (;;) {
@@ -584,6 +613,8 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
     $('#unset').onclick = () => change(items.filter(x => sel.has(x.id)), {noloc:true});
     $('#archive').onclick = () => change(items.filter(x => sel.has(x.id) && !x.archived), {archive:true});
     $('#restore').onclick = () => change(items.filter(x => sel.has(x.id) && x.archived), {archive:false});
+    $('#setcover').onclick = () => { const x = items.find(x => sel.has(x.id)); if (x) setCover(x.rel); };
+    $('#autocover').onclick = () => setCover(null);
     $('#moveday').onchange = e => { const k = e.target.value; e.target.value = ''; if (k) change(items.filter(x => sel.has(x.id)), {toDay:k}); };
     const doShift = () => {
       const m = $('#shift').value.trim().match(/^([+-])?(\d{1,3})(?::(\d{1,2}))?$/);
@@ -595,6 +626,7 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
     $('#shift').addEventListener('keydown', e => { if (e.key === 'Enter') doShift(); });
     $('#undo').onclick = () => {
       const batch = undoStack.pop(); if (!batch) return;
+      if ('cover' in batch) { coverRel = batch.cover; coverTouched = true; }
       for (const s of batch) {
         const x = s.x; for (const f of FIELDS) { if (s.snap[f] === undefined) delete x[f]; else x[f] = s.snap[f]; }
         if (s.had) edits[x.rel] = s.prev; else delete edits[x.rel];
@@ -612,7 +644,10 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
         const j = JSON.parse(await f.text()); const ov = j.overrides || j; const byRel = new Map(items.map(x=>[x.rel,x]));
         let n = 0; const list = [];
         for (const [rel, v0] of Object.entries(ov)) { const v = norm(v0), x = byRel.get(rel); if (!v || !x) continue; edits[rel] = {...(edits[rel]||{}), ...v}; applyEdit(x, edits[rel]); syncMarker(x); n++; }
-        afterChange(true); status(`Imported ${n} fixes`, 'ok');
+        // A file without settings (or without a cover in them) leaves the cover alone
+        const s = j.overrides && j.settings && typeof j.settings === 'object' ? j.settings : {};
+        if ('cover' in s) { coverRel = s.cover || null; coverTouched = true; }
+        afterChange(true); status(`Imported ${n} fixes${'cover' in s ? ' and the cover' : ''}`, 'ok');
       } catch(err) { status(`Couldn't read that file: ${err.message}`, 'err'); }
     };
     $('#apply').onclick = () => runBuild('data');

@@ -10,15 +10,15 @@ Base: `https://media.job-joseph.com`. All paths below are relative to it unless 
     "slug": "thailand-2026",
     "title": "Thailand 2026",
     "start": "2026-09-29", "end": "2026-10-10", "days": 12,
-    "cover": "public/covers/thailand-2026-card.jpg",
-    "coverImage": "public/covers/thailand-2026.jpg",
+    "cover": "public/covers/thailand-2026-card.jpg?v=3f9a1c07be",
+    "coverImage": "public/covers/thailand-2026.jpg?v=8d21e4a0c5",
     "counts": { "items": 1034, "photos": 545, "videos": 489, "onMap": 882 },
     "data": "thailand-2026/trip.json",
     "updated": "2026-10-12T19:25:06+00:00"
   }]
 }
 ```
-Sorted newest trip first. `cover` ≤640px, `coverImage` 1600px (falls back to `cover`).
+Sorted newest trip first. `cover` ≤640px, `coverImage` 1600px (falls back to `cover`). Both may end in `?v=<hash>` (changes when the cover image changes); use the value as-is.
 
 ## `<slug>/trip.json` (protected by Access)
 ```json

@@ -87,7 +87,9 @@ Items with no usable time are skipped and listed. Date-only items more than a da
 
 ### `overrides.json`
 
-Keyed by path relative to the trip folder. Saved as `{version: 2, trip, saved, overrides: {...}}`; the previous file is kept as `overrides.bak.json`.
+Keyed by path relative to the trip folder. Saved as `{version: 2, trip, saved, settings: {...}, overrides: {...}}` (`trip` is the title); the previous file is kept as `overrides.bak.json`.
+
+`settings` holds trip-level choices; today only `cover` (see Cover). A save that doesn't include `settings`, or doesn't name a key, keeps what's on disk; clearing is explicit (`"cover": null`). Import of a file without settings never clears them.
 
 | Value | Meaning |
 |---|---|
@@ -108,20 +110,34 @@ Hide a shot from the published trip without deleting anything.
 | `trip.json` (public) | Archived shots left out; counts exclude them; a day with only archived shots is left out |
 | Days and dates | Day numbers and `start`/`end` come from all shots, so archiving never renumbers days |
 | Location matching | Archived GPS/manual shots still anchor nearby shots (local maths only) |
-| Cover | Middle eligible shot of all shots; if it's archived, the next eligible one (then the previous) |
+| Cover | A chosen cover that's archived falls back to automatic until restored (see Cover) |
 | Local files | Originals and `_tripmap/` previews are never deleted; Scan keeps building them |
 | R2 | Publish removes the archived shot's previews; Restore + Publish uploads them again |
 
 No `trip.json` schema change: the [data contract](docs/data-contract.md) already allows day gaps.
 
+### Cover
+
+One cover per trip. It drives the landing card (640 px) and the hero (1600 px).
+
+| Rule | Behaviour |
+|---|---|
+| Chosen | `settings.cover` = relative path of a photo (survives rebuilds like other fixes). Used if it exists, is a photo and isn't archived |
+| Fallback | Otherwise the automatic pick, with one `WARNING` line saying why: missing, a video, or archived |
+| Automatic pick | Unchanged: middle placed photo (else middle shot with a card); if that's archived, the next eligible one, then the previous |
+| Archive / Restore | Archiving never clears the setting, so Restore + Apply brings the chosen cover back |
+| `trip.json` | No schema change: `cover` is still `cards/<id>.jpg` |
+| `trips.json` | `cover`/`coverImage` end in `?v=<10 hex of the image's SHA-256>`, so a new cover shows at once despite the 1 h cache. The Worker ignores query strings |
+
 ### Editor (`serve.py` + `viewer.html?edit`)
 
 - **Filters:** All (not archived) / Needs review (not `gps` or `manual`) / No location / Archived (n).
 - **Archive / Restore** the selection (keys **A** / **Shift+A**). Archived shots can still be placed, moved and re-timed.
+- **Set as cover** (exactly one non-archived photo; otherwise disabled with the reason as its tooltip) / **Automatic cover**. ★ on the cover's strip tile; the summary says `Cover: <file>` or `Cover: automatic`, plus a note if the chosen cover is archived, missing or not a photo.
 - **Select:** click, Shift-click range, double-click to view.
 - **Place:** click map or pin to place the selection; drag a pin; Remove location.
 - **Day/time:** Move to day (keeps clock time), Shift time (`-1:30`, `+2`).
-- **Undo** (Ctrl+Z); every change autosaves to `overrides.json`.
+- **Undo** (Ctrl+Z, also undoes cover changes); every change autosaves to `overrides.json`.
 - **Apply to map** (data-only build), **Scan for new files** (full build), **Publish**; one job at a time.
 - **Backup / Import** fixes files.
 - Server: localhost only, Range support for video. API needs the `X-TripMap: 1` header and refuses foreign Origins.
@@ -134,7 +150,7 @@ Order matters so the site never points at missing files:
 1. `rclone copy --files-from` the referenced previews → `<slug>/`, `Cache-Control: public, max-age=604800`. Only new or changed files; never deletes.
 2. `rclone copy` `trip.json`, `no-cache`.
 3. `rclone delete --files-from` the delete list. Runs only if 1 and 2 succeeded. Prints the count (names with `--verbose`). A failure here still lets step 4 run, then exits with an error.
-4. Copy covers to `public/covers/` (640 px card + 1600 px hero when the cover is a photo), merge this trip into `trips.json` (newest first, `no-cache`).
+4. Copy covers to `public/covers/` (640 px card + 1600 px hero when the cover is a photo), merge this trip into `trips.json` (newest first, `no-cache`; cover URLs carry `?v=`).
 
 | Switch | Effect |
 |---|---|

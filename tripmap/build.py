@@ -410,11 +410,13 @@ def main():
         csv_locs = load_csv_locations(csv_path, args)
 
     ov_path = Path(args.overrides) if args.overrides else root / "overrides.json"
-    overrides = {}
+    overrides, settings = {}, {}
     if ov_path.exists():
         try:
             raw = json.loads(read_text_any(ov_path))
             overrides = raw.get("overrides", raw) if isinstance(raw, dict) else {}
+            settings = raw.get("settings") if isinstance(raw, dict) and "overrides" in raw else None
+            settings = settings if isinstance(settings, dict) else {}
             log(f"Using {len(overrides)} manual locations from {ov_path.name}")
         except (ValueError, AttributeError) as e:
             sys.exit(f"Couldn't read {ov_path}: {e}")
@@ -613,6 +615,28 @@ def main():
             except Exception:  # noqa: BLE001
                 pass
         clean.append(y)
+
+    def pick_cover(cands):
+        # Middle of all candidates (archived included, so the pick stays put); if
+        # that shot is archived, the next eligible one after it, then before it.
+        mid = len(cands) // 2
+        return next((y for y in cands[mid:] + cands[:mid][::-1] if not y.get("archived")), None)
+    auto = pick_cover([y for y in clean if y["type"] == "photo" and y.get("card") and y.get("lat") is not None]) \
+        or pick_cover([y for y in clean if y.get("card")])
+    # A chosen cover (editor: Set as cover) wins if it's a published photo. It's
+    # never cleared by archiving, so Restore brings it back.
+    chosen_rel = settings.get("cover") if isinstance(settings.get("cover"), str) else None
+    cover_item = auto
+    if chosen_rel:
+        c = next((y for y in clean if y["rel"] == chosen_rel), None)
+        why = ("is missing (moved, renamed or not built yet)" if not c or not c.get("card") else
+               "is a video" if c["type"] != "photo" else "is archived" if c.get("archived") else None)
+        if why:
+            log(f"WARNING: the chosen cover {chosen_rel} {why}; using the automatic pick.")
+        else:
+            cover_item = c
+    cover = cover_item["card"] if cover_item else None
+
     title = args.name or root.name
     slug = args.slug or slugify(title)
     data = {
@@ -621,6 +645,8 @@ def main():
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "tzOffsetMin": int(view_off.total_seconds() // 60),
         "contact": args.contact,
+        "coverRel": chosen_rel,
+        "autoCover": auto["id"] if auto else None,
         "days": days,
         "items": clean,
     }
@@ -639,14 +665,6 @@ def main():
     day_n = {d["key"]: d["n"] for d in days}
     for y in pub_items:
         y["dayN"] = day_n.get(y["day"])
-
-    def pick_cover(cands):
-        # Middle of all candidates (archived included, so the pick stays put); if
-        # that shot is archived, the next eligible one after it, then before it.
-        mid = len(cands) // 2
-        return next((y["card"] for y in cands[mid:] + cands[:mid][::-1] if not y.get("archived")), None)
-    cover = pick_cover([y for y in clean if y["type"] == "photo" and y.get("card") and y.get("lat") is not None]) \
-        or pick_cover([y for y in clean if y.get("card")])
     public = {
         "version": 1,
         "title": title,
