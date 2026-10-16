@@ -205,8 +205,8 @@ Manages the above through the Cloudflare API, so onboarding needs no dashboard c
 
 | Rule | Behaviour |
 |---|---|
-| Mirrors Thailand | App: destinations above, `domain` = the first, One-time PIN as the only IdP, no auto-redirect, App Launcher hidden, session 24 h, Thailand's cookie settings. Policy: allow, include crew OR All trips, no exclude/require, session 730 h. Constants at the top of `access.py`; `setup thailand-2026 "Thailand 2026" --dry-run` must differ only in the app's name |
-| Idempotent | Group/policy found by exact name; app by destination first (the Thailand app is named `media`), then name. Matches → "Nothing to change". Differences print as `field: live -> expected` and are written only after y/N (or `--yes`). Updates GET the live object, change only managed fields and PUT the whole object back |
+| Mirrors Thailand | App: destinations above, `domain` = the first, One-time PIN as the only IdP, no auto-redirect, App Launcher hidden, session 24 h, Thailand's cookie settings. Policy: allow, include crew OR All trips, no exclude/require, session 730 h. Constants at the top of `access.py`; `setup thailand-2026 "Thailand 2026" --dry-run` must print "Nothing to change" |
+| Idempotent | Group/policy found by exact name; app by destination first, then name. Matches → "Nothing to change". Differences print as `field: live -> expected` and are written only after y/N (or `--yes`). Updates GET the live object, change only managed fields and PUT the whole object back |
 | Never deletes | No app, policy or group is ever deleted; that stays a dashboard action. Two apps on one slug → error |
 | Empty group | Holds the rule `nobody@wander.invalid` (can't exist); removing the last member puts it back. Hidden in `list` |
 | Guardrails | Before any POST/PUT: groups may hold only email rules; policies only rule-group rules with decision `allow`; apps only reference reusable policies by id. Anything else (everyone, service tokens, IP ranges, email domains, bypass, non_identity…) is refused loudly (exit 3), and setup/add/remove also refuse when a live group already holds such a rule |

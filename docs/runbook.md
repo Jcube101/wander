@@ -52,7 +52,7 @@ The Access app must exist **before** Publish; Access is the only gate. In Claude
 - Bucket `trip-media` (R2), no public domain. rclone remote `r2` (key = Object Read & Write, this bucket only).
 - Worker `wander-media`, custom domain `media.job-joseph.com`.
 - `wander.job-joseph.com`: A 185.158.133.1, **DNS only** (Lovable). Don't proxy it — it doesn't help (see decisions).
-- Zero Trust team `yellow-night-d03a`. Rule groups: `Wander – All trips`, `Wander – Thailand crew`. App `media` (destinations `/thailand-2026`, `/auth/thailand-2026`; `access.py setup thailand-2026 "Thailand 2026"` offers to rename it `Wander – Thailand 2026`), reusable policy `Wander – Thailand viewers`.
+- Zero Trust team `yellow-night-d03a`. Rule groups: `Wander – All trips`, `Wander – Thailand crew`. App `Wander – Thailand 2026` (destinations `/thailand-2026`, `/auth/thailand-2026`), reusable policy `Wander – Thailand viewers`.
 
 ## Archive notes
 - Archived shots' previews are deleted from R2 on Publish, but a signed-in viewer's browser may keep cached copies for up to a week (`private, max-age=604800`).

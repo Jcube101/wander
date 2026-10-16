@@ -225,8 +225,8 @@ def by_name(items, name):
 
 
 def find_app(apps, slug, name=None):
-    """The app guarding this slug: matched by destination first (the Thailand app is
-    named "media"), else by name. Several candidates is an error."""
+    """The app guarding this slug: matched by destination first (names can drift; the
+    Thailand app was once "media"), else by name. Several candidates is an error."""
     want = set(destinations(slug))
     hits = [a for a in apps if want & {d.get("uri") for d in a.get("destinations") or []}]
     if not hits and name:
