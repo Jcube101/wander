@@ -188,7 +188,7 @@ def main():
         if not protected:
             how = f"got {status}" if isinstance(status, int) else f"couldn't check: {status}"
             sys.exit(f"ERROR: {slug} isn't protected by Cloudflare Access ({how}). "
-                     f"Create the Access app for {slug} first, see docs/runbook.md"
+                     f"Create the Access app for {slug} first, see RUNBOOK.md"
                      f"{'' if isinstance(status, int) else ' (or use --allow-unprotected)'}")
         log(f"Access check: {slug} is protected ({status}).")
     remote = args.remote.rstrip("/")

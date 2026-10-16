@@ -20,10 +20,10 @@ The website itself is NOT in this repo: it's the Lovable project synced to `Jcub
 - **Git:** private repo, so commit straight to main. No branches or PRs unless Job asks.
 
 ## Data contract
-`docs/data-contract.md` is the interface between `tripmap/` (producer) and the Lovable site (consumer). Changing a field means updating that doc and sending Lovable a prompt.
+SPEC.md → "Data contract (trip.json / trips.json)" is the interface between `tripmap/` (producer) and the Lovable site (consumer). Changing a field means updating that section and sending Lovable a prompt.
 
 ## Adding a trip
-Use `/new-trip`, which follows `docs/runbook.md` → New trip.
+Use `/new-trip`, which follows `RUNBOOK.md` → New trip.
 
 ## Testing
 - Worker: `cd worker && npm test` (node, mocked R2 bucket).
@@ -32,5 +32,8 @@ Use `/new-trip`, which follows `docs/runbook.md` → New trip.
 - CI (`.github/workflows/test.yml`) runs all three on every push to main. After every push, check the run with `gh run list --limit 1` (or `gh run watch`). Fix a red build before doing anything else. The runner is pinned to `ubuntu-24.04` (not `ubuntu-latest`) so an image switch can't break CI unannounced; bump it on purpose later, in its own commit, and check the run.
 
 ## Project docs
-- `SPEC.md` — what Wander must do (requirements, non-goals). `ROADMAP.md` — Now / Next / Later.
-- `LEARNINGS.md` — gotchas learned the hard way (symptom → cause → fix). Read it before debugging; add new lessons there.
+- `README.md` — overview and quick start.
+- `SPEC.md` — what Wander must do, how the pieces fit, and the data contract.
+- `ROADMAP.md` — Done / Now / Next / Later, including open known issues.
+- `LEARNINGS.md` — gotchas (symptom → cause → fix), accepted limitations, and Decisions D1–D9. Read it before debugging; add new lessons there.
+- `RUNBOOK.md` — everyday tasks, new trip, setup facts, troubleshooting.

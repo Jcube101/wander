@@ -132,7 +132,7 @@ class Publish(unittest.TestCase):
         code, _ = self.run_main(rc, protected=False)
         self.assertEqual(rc.steps, [])
         self.assertIn("Create the Access app for bali-2027 first", code)
-        self.assertIn("docs/runbook.md", code)
+        self.assertIn("RUNBOOK.md", code)
 
     def test_allow_unprotected_skips_the_check(self):
         rc = FakeRclone()

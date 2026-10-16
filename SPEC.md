@@ -1,6 +1,6 @@
 # Wander — Spec
 
-What Wander is and what it must do. For *how* the pieces fit, see [docs/architecture.md](docs/architecture.md); for exact JSON shapes, see [docs/data-contract.md](docs/data-contract.md). Why things are this way: [docs/decisions.md](docs/decisions.md).
+What Wander is and what it must do: how the pieces fit (Components), what each must do, and the exact JSON shapes ([Data contract](#data-contract-tripjson--tripsjson)). Why things are this way: [LEARNINGS.md → Decisions](LEARNINGS.md#decisions).
 
 ## Purpose
 
@@ -17,24 +17,45 @@ A private archive of trips. Each trip is a map, a timeline and a gallery of ever
 
 ## Components
 
+### How the pieces fit
+
+```
+Hard disk (originals — never uploaded)
+  D:\<trip>\                 photos, DJI clips (+ .LRF proxies), clip_locations.csv, overrides.json
+  D:\<trip>\Open Wander Editor.bat   one-file launcher → runs C:\Users\jobjo\Github\wander\tripmap\serve.py on this folder
+  D:\<trip>\_tripmap\        built bundle: thumbs/ cards/ media/ trip.json  (+ local-only trip.js, index.html)
+        │
+        │  publish.py (rclone; key scoped to the bucket)
+        ▼
+R2 bucket "trip-media"  — private, no public domain
+  trips.json                       list of trips (public)
+  public/covers/<slug>(-card).jpg  landing-page covers (public)
+  <slug>/trip.json|thumbs|cards|media   trip content (protected)
+        │
+        │  R2 binding
+        ▼
+Worker "wander-media" on media.job-joseph.com
+  /trips.json, /public/*     public, CORS (credentials) for wander + Lovable preview
+  /<slug>/...                behind Cloudflare Access app for that trip
+  /auth/<slug>?return=URL    behind the same Access app; 302s back to *.job-joseph.com only
+  /me                        email from the Access cookie (display only)
+        ▲
+        │  fetch(credentials:'include'); <img>/<video> send the cookie automatically (same site)
+        │
+wander.job-joseph.com  — Lovable-hosted app shell (repo: travelogue-map-memory), public
+  /            landing: trips from trips.json, lock badge via HEAD trip.json
+  /<slug>      trip page; "This trip is private" → Sign in → /auth/<slug> → back with ?signedin=1
+```
+
 | Component | Where it runs | Contract |
 |---|---|---|
 | **tripmap build** (`build.py`) | Job's PC, from this repo | Trip folder → `_tripmap/` bundle + `trip.json` |
 | **tripmap editor** (`serve.py` + `viewer.html`) | `127.0.0.1:8765`, started by the trip folder's launcher | Reads/writes `overrides.json`; runs build/publish |
 | **tripmap publish** (`publish.py`) | Job's PC | `_tripmap/` → R2 via rclone |
-| **R2 bucket** `trip-media` | Cloudflare, private, no public domain | Layout below |
+| **R2 bucket** `trip-media` | Cloudflare, private, no public domain | Layout in the diagram above |
 | **Worker** `wander-media` | `media.job-joseph.com` | Serves an allow-list of R2 keys |
 | **Cloudflare Access** | Zero Trust, in front of the Worker | Decides who sees which trip |
-| **Lovable site** | `wander.job-joseph.com` (repo `Jcube101/travelogue-map-memory`) | Consumes the [data contract](docs/data-contract.md) |
-
-### R2 layout
-
-| Key | Access |
-|---|---|
-| `trips.json` | Public |
-| `public/covers/<slug>-card.jpg`, `public/covers/<slug>.jpg` | Public |
-| `<slug>/trip.json` | Protected (trip's Access app) |
-| `<slug>/thumbs/`, `cards/`, `media/` | Protected |
+| **Lovable site** | `wander.job-joseph.com` (repo `Jcube101/travelogue-map-memory`) | Consumes the [data contract](#data-contract-tripjson--tripsjson) |
 
 ## Functional requirements
 
@@ -60,6 +81,8 @@ A private archive of trips. Each trip is a map, a timeline and a gallery of ever
 | `--photo-workers` / `--video-workers` | CPUs−1 / 2 | Parallelism |
 | `--contact` | none | "Request original" link (local viewer only) |
 | `--limit` | 0 | First N items (testing) |
+
+One `exiftool -json` pass over the trip folder, then per item:
 
 **Time** — first clue that works:
 1. DJI video → filename + `--camera-offset`
@@ -114,7 +137,7 @@ Hide a shot from the published trip without deleting anything.
 | Local files | Originals and `_tripmap/` previews are never deleted; Scan keeps building them |
 | R2 | Publish removes the archived shot's previews; Restore + Publish uploads them again |
 
-No `trip.json` schema change: the [data contract](docs/data-contract.md) already allows day gaps.
+No `trip.json` schema change: the [data contract](#data-contract-tripjson--tripsjson) already allows day gaps.
 
 ### Cover
 
@@ -148,7 +171,7 @@ One cover per trip. It drives the landing card (640 px) and the hero (1600 px).
 - **Apply to map** (data-only build), **Scan for new files** (full build), **Publish**; one job at a time.
 - **Backup / Import** fixes files.
 - Shortcuts are ignored while typing in a field or while the viewer is open; **?** toggles help; Esc closes the menu/help first, then clears the selection.
-- Server: localhost only, Range support for video. API needs the `X-TripMap: 1` header and refuses foreign Origins.
+- Server: localhost only, Range support for video. API needs the `X-TripMap: 1` header and refuses foreign Origins (CSRF-safe).
 
 ### Publish (`tripmap/publish.py`)
 
@@ -188,8 +211,7 @@ Never uploaded: anything `trip.json` doesn't reference, including `trip.js`, `in
 | Methods | GET, HEAD, OPTIONS (preflight 204); others 405 |
 | Path safety | Any `%`, `..` or `//` → 404 |
 | Allow-list | `trips.json`; `public/…`; `<slug>/trip.json`, `<slug>/thumbs|cards/<id>.jpg`, `<slug>/media/<id>.jpg|mp4`. Everything else 404; never lists |
-| `/auth/<slug>?return=` | 302 to `return` if https `*.job-joseph.com`, else `https://wander.job-joseph.com/<slug>` |
-| `/me` | `{email}` from the `CF_Authorization` cookie (null if missing/expired); display only |
+| `/auth/<slug>?return=`, `/me` | See [Worker endpoints](#worker-endpoints). `/me` reads the `CF_Authorization` cookie (null if missing/expired) |
 | Range | 206 with `content-range`, incl. suffix ranges |
 | Conditional | `If-None-Match` etc. → 304 |
 | Caching | Public: data `no-cache`, images 1 h. Protected: `private`, data `no-cache`, media 1 week |
@@ -198,7 +220,7 @@ Never uploaded: anything `trip.json` doesn't reference, including `trip.js`, `in
 
 ### Access
 
-One self-hosted app per trip with destinations `media.job-joseph.com/<slug>` and `media.job-joseph.com/auth/<slug>`. Allow policy = trip crew OR All trips. One-time PIN login.
+Rule groups per audience (`Wander – All trips`, `Wander – <Trip> crew`). One self-hosted app per trip with destinations `media.job-joseph.com/<slug>` and `media.job-joseph.com/auth/<slug>`. Allow policy = trip crew OR All trips. One-time PIN login. Managed with `tripmap/access.py` (below); the dashboard is the fallback.
 
 ### Access scripting (`tripmap/access.py`)
 
@@ -225,6 +247,66 @@ Manages the above through the Cloudflare API, so onboarding needs no dashboard c
 | Token handling | Sent only in the `Authorization` header; never printed, logged or committed (API error text is scrubbed too). Claude Code never reads the file |
 | Emails | May appear in terminal output; never in the repo, docs, test fixtures (use `@example.com`) or commit messages |
 
+## Data contract (trip.json / trips.json)
+
+The interface between `tripmap/` (producer) and the Lovable site (consumer). Changing a field means updating this section and sending Lovable a prompt.
+
+Base: `https://media.job-joseph.com`. All paths below are relative to it unless noted.
+
+### `trips.json` (public)
+```json
+{
+  "version": 1,
+  "trips": [{
+    "slug": "thailand-2026",
+    "title": "Thailand 2026",
+    "start": "2026-09-29", "end": "2026-10-10", "days": 12,
+    "cover": "public/covers/thailand-2026-card.jpg?v=3f9a1c07be",
+    "coverImage": "public/covers/thailand-2026.jpg?v=8d21e4a0c5",
+    "counts": { "items": 1034, "photos": 545, "videos": 489, "onMap": 882 },
+    "data": "thailand-2026/trip.json",
+    "updated": "2026-10-12T19:25:06+00:00"
+  }]
+}
+```
+Sorted newest trip first. `cover` ≤640px, `coverImage` 1600px (falls back to `cover`). Both may end in `?v=<hash>` (changes when the cover image changes); use the value as-is.
+
+### `<slug>/trip.json` (protected by Access)
+```json
+{
+  "version": 1, "title": "...", "slug": "...", "generated": "ISO time",
+  "tzOffsetMin": 420,
+  "start": "YYYY-MM-DD", "end": "YYYY-MM-DD",
+  "cover": "cards/<id>.jpg",
+  "counts": { "items": 0, "photos": 0, "videos": 0, "onMap": 0 },
+  "days": [{ "key": "YYYY-MM-DD", "n": 1, "count": 3 }],
+  "items": [{
+    "id": "12-hex", "type": "photo|video",
+    "t": 1790632024, "day": "YYYY-MM-DD", "dayN": 1,
+    "lat": 13.7, "lon": 100.5,
+    "loc": "gps|csv|matched|manual|cleared",
+    "conf": "high|medium|low",
+    "dur": 12.0, "orig": "DJI_2026...MP4",
+    "thumb": "thumbs/<id>.jpg", "card": "cards/<id>.jpg", "ar": 1.778,
+    "media": "media/<id>.jpg|mp4"
+  }]
+}
+```
+- Item paths are relative to `<slug>/`.
+- `lat`/`lon` may be absent (unplaced shot). `loc` is an internal *source code*, never a place name — don't display it. `cleared` = deliberately unplaced (no `lat`/`lon`).
+- `t` is unix seconds; show times using `tzOffsetMin` (the trip's zone), never the viewer's.
+- `day`/`dayN` are computed in the trip zone; `days[].n` counts from the first day (gaps keep their numbers).
+
+### Worker endpoints
+- `GET /me` → `{ "email": string|null }` (from the Access cookie; display only).
+- `GET /auth/<slug>?return=<url>` → behind the trip's Access app; 302 to `return` if it's an https `*.job-joseph.com` URL, else to `https://wander.job-joseph.com/<slug>`.
+- Logout: `/cdn-cgi/access/logout` (Cloudflare).
+
+### Client rules
+- `fetch(..., { credentials: 'include' })` for everything on the media host.
+- No `crossorigin` attribute on `<img>`/`<video>` (it would drop the cookie).
+- Never persist trip data in browser storage.
+
 ## Non-functional requirements
 
 | Requirement | How it's kept |
@@ -234,7 +316,7 @@ Manages the above through the Cloudflare API, so onboarding needs no dashboard c
 | No database, ever | Identity = Access cookie; data = static JSON in R2 |
 | Free tier only | R2 ≤ 10 GB (~2.5 GB/trip); Cloudflare free plans |
 | One copy of the code | Runs from this repo; trip folders hold only a launcher |
-| Client rules | `credentials: 'include'`; no `crossorigin` on `<img>`/`<video>`; nothing in browser storage; times shown in the trip's zone |
+| Client rules | See [Client rules](#client-rules) |
 | Tested on every push | GitHub Actions runs the tripmap and Worker suites on each push to main; no real exiftool/ffmpeg/rclone, network or trip drive needed. A red build is fixed first |
 | Privacy in git | No media, overrides, CSVs, trip JSON or coordinates committed |
 
@@ -248,4 +330,4 @@ Manages the above through the Cloudflare API, so onboarding needs no dashboard c
 
 ## Onboarding a trip
 
-Follow [docs/runbook.md → New trip](docs/runbook.md#new-trip).
+Follow [RUNBOOK.md → New trip](RUNBOOK.md#new-trip).

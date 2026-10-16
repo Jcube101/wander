@@ -23,7 +23,7 @@ In PowerShell, set this once per window: `$W = "C:\Users\jobjo\Github\wander\tri
    ```
    Check the line starting `clip CSV columns ->` if you use a `clip_locations.csv`. The full build makes 1600px photos and 720p video previews (from DJI `.LRF` proxies when present). Re-running skips anything already built, so you can stop and resume.
 2. **Add the launcher:** copy `Open Wander Editor.bat` from this folder into the trip folder (next to the photos, not inside `_tripmap`). If the repo isn't at `C:\Users\jobjo\Github\wander`, edit the `WANDER=` line in it.
-3. **Access before Publish:** `python "$W\access.py" setup <slug> "<Trip title>" --dry-run`, check the plan, then run it again without `--dry-run`. Add people with `python "$W\access.py" add <slug> <email>` (see `docs/runbook.md`).
+3. **Access before Publish:** `python "$W\access.py" setup <slug> "<Trip title>" --dry-run`, check the plan, then run it again without `--dry-run`. Add people with `python "$W\access.py" add <slug> <email>` (see `RUNBOOK.md`).
 4. Double-click the launcher, fix things, **Apply to map**, **Publish** (it refuses until step 3 is done).
 
 ## Options
@@ -70,7 +70,7 @@ The toolbar under the map has the filters on the left; on the right, the save st
 3. Previews the trip no longer uses (archived shots) are deleted from R2. It stops before changing anything if that's over 20% of the trip (`--allow-mass-delete` to override).
 4. Covers to `public/covers/`, and this trip merged into `trips.json`.
 
-Add `--dry-run` to see the plan without changing anything. Only files `trip.json` references are uploaded, so `trip.js` and `index.html` (local editor files; `trip.js` holds folder paths) and archived shots never leave the disk. Data format: `docs/data-contract.md`.
+Add `--dry-run` to see the plan without changing anything. Only files `trip.json` references are uploaded, so `trip.js` and `index.html` (local editor files; `trip.js` holds folder paths) and archived shots never leave the disk. Data format: `SPEC.md` → Data contract.
 
 ## Size
 

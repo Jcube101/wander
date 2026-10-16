@@ -1,6 +1,6 @@
 # Wander — Roadmap
 
-Size: **S** ≈ an evening, **M** ≈ a weekend, **L** ≈ several sessions. Known problems: [docs/known-issues.md](docs/known-issues.md).
+Size: **S** ≈ an evening, **M** ≈ a weekend, **L** ≈ several sessions. Open known issues are rows marked **Known issue**; accepted limitations live in [LEARNINGS.md](LEARNINGS.md).
 
 ## Done
 
@@ -25,7 +25,10 @@ Nothing in progress; pick from Next.
 
 ## Next
 
-Nothing queued; see Later.
+| Item | Why | Size | Depends on |
+|---|---|---|---|
+| **Known issue:** early DJI clips (before ~2 Oct midday) have an uncertain camera offset | Left unplaced on the Thailand trip; fix in the editor (Shift time / place) | S | — |
+| **Known issue:** last Bangalore clips on 10 Oct have no phone anchors | Unplaced on the Thailand trip; place them in the editor | S | — |
 
 ## Later
 
@@ -33,4 +36,3 @@ Nothing queued; see Later.
 |---|---|---|---|
 | Reverse-geocoded place names | Captions and day chips say "Chiang Mai", not just a pin | M | Data-contract change + Lovable prompt; names stay in protected `trip.json` only |
 | Duplicate detection (perceptual hash) | Same photo from two sources appears twice | M | — |
-| Lovable preview loading protected trips | Preview origin has no Access cookie | S | Likely won't fix — test on wander.job-joseph.com |

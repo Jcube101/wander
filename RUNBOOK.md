@@ -52,7 +52,7 @@ The Access app must exist **before** Publish; Access is the only gate. In Claude
 ## Setup facts
 - Bucket `trip-media` (R2), no public domain. rclone remote `r2` (key = Object Read & Write, this bucket only).
 - Worker `wander-media`, custom domain `media.job-joseph.com`.
-- `wander.job-joseph.com`: A 185.158.133.1, **DNS only** (Lovable). Don't proxy it — it doesn't help (see decisions).
+- `wander.job-joseph.com`: A 185.158.133.1, **DNS only** (Lovable). Don't proxy it — it doesn't help (see D7 in [LEARNINGS.md](LEARNINGS.md#decisions)).
 - Zero Trust team `yellow-night-d03a`. Rule groups: `Wander – All trips`, `Wander – Thailand crew`. App `Wander – Thailand 2026` (destinations `/thailand-2026`, `/auth/thailand-2026`), reusable policy `Wander – Thailand viewers`.
 
 ## Archive notes

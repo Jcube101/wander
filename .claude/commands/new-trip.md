@@ -7,7 +7,7 @@ argument-hint: "<trip folder>" "<Title>" <+HH:MM tz> [camera offset +HH:MM]
 
 Arguments: `$ARGUMENTS` → trip folder, title, timezone, optional DJI camera offset. If any required one is missing, ask for it before doing anything.
 
-The procedure is **docs/runbook.md → "New trip"**. Read it now and follow it; it is the only place the steps are written out. Derive `<slug>` (as `build.py` does: lowercase, non-alphanumerics → `-`) and `<Trip>` (short name: the title without a trailing year, e.g. `Bali 2027` → `Bali`). Confirm `<Trip>` with Job if unsure.
+The procedure is **RUNBOOK.md → "New trip"**. Read it now and follow it; it is the only place the steps are written out. Derive `<slug>` (as `build.py` does: lowercase, non-alphanumerics → `-`) and `<Trip>` (short name: the title without a trailing year, e.g. `Bali 2027` → `Bali`). Confirm `<Trip>` with Job if unsure.
 
 ## Rules for this command
 - **Never publish.** Not `publish.py`, not `--allow-unprotected`, not the editor's button.
