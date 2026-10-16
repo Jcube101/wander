@@ -10,7 +10,7 @@ the list of trips the Wander site shows on its home page.
 
 Order matters so the site never points at files that aren't there yet:
   1. thumbnails, gallery images, previews (cached by browsers for a week)
-  2. trip.json, trip.js, index.html        (never cached, so fixes show at once)
+  2. trip.json                             (never cached, so fixes show at once)
   3. trips.json                            (never cached)
 Only new or changed files are sent.
 """

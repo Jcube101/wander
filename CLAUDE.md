@@ -22,10 +22,8 @@ The website itself is NOT in this repo: it's the Lovable project synced to `Jcub
 
 ## Testing
 - Worker: `cd worker && npm test` (node, mocked R2 bucket).
-- tripmap: no automated tests yet (see `docs/roadmap.md`); was verified against a fixture trip folder with a stubbed exiftool/rclone.
+- tripmap: no automated tests yet (see `ROADMAP.md`); was verified against a fixture trip folder with a stubbed exiftool/rclone.
 
-## Gotchas learned the hard way
-- `wander.job-joseph.com` is a DNS-only A record to Lovable (185.158.133.1). Lovable hosts on its own Cloudflare account, so this zone's Workers/Access **never run** for wander (no O2O with an A record). That's why the lock is on `media.`, not `wander.`.
-- CARTO raster tiles now need an API key → viewer uses Esri tiles + OSM.
-- DJI Pocket 4P writes no standard GPS; its clock offset drifts (~+7:45 vs UTC on this trip) — times come from filenames + `--camera-offset`, locations from phone-photo matching or manual fixes.
-- rclone's early ETA is meaningless; a 2.3 GB upload took ~10 min.
+## Project docs
+- `SPEC.md` — what Wander must do (requirements, non-goals). `ROADMAP.md` — Now / Next / Later.
+- `LEARNINGS.md` — gotchas learned the hard way (symptom → cause → fix). Read it before debugging; add new lessons there.

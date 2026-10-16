@@ -33,7 +33,7 @@ Sorted newest trip first. `cover` ≤640px, `coverImage` 1600px (falls back to `
     "id": "12-hex", "type": "photo|video",
     "t": 1790632024, "day": "YYYY-MM-DD", "dayN": 1,
     "lat": 13.7, "lon": 100.5,
-    "loc": "gps|csv|matched|manual",
+    "loc": "gps|csv|matched|manual|cleared",
     "conf": "high|medium|low",
     "dur": 12.0, "orig": "DJI_2026...MP4",
     "thumb": "thumbs/<id>.jpg", "card": "cards/<id>.jpg", "ar": 1.778,
@@ -42,7 +42,7 @@ Sorted newest trip first. `cover` ≤640px, `coverImage` 1600px (falls back to `
 }
 ```
 - Item paths are relative to `<slug>/`.
-- `lat`/`lon` may be absent (unplaced shot). `loc` is an internal *source code*, never a place name — don't display it.
+- `lat`/`lon` may be absent (unplaced shot). `loc` is an internal *source code*, never a place name — don't display it. `cleared` = deliberately unplaced (no `lat`/`lon`).
 - `t` is unix seconds; show times using `tzOffsetMin` (the trip's zone), never the viewer's.
 - `day`/`dayN` are computed in the trip zone; `days[].n` counts from the first day (gaps keep their numbers).
 
