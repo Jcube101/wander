@@ -117,6 +117,12 @@ body.editing #edit{display:flex}
 .menu hr{border:0;border-top:1px solid var(--line);margin:4px 2px}
 .menu.help{min-width:280px;max-width:min(340px,calc(100vw - 32px));padding:10px 14px;font-size:12px;color:var(--muted)}
 .menu.help p{margin:0 0 6px}
+.menu.help{max-height:calc(100dvh - 140px);overflow-y:auto;overscroll-behavior:contain}
+.menu.help .hh{font-weight:600;color:var(--ink);margin:2px 0 4px}
+.menu.help .how{margin:0 0 10px;padding:0;list-style:none}
+.menu.help .how li{margin:0 0 5px;line-height:1.35}
+.menu.help b{color:var(--ink);font-weight:600}
+.menu.help code{font-size:11px}
 .menu.help kbd{font:600 11px Inter,sans-serif;background:var(--chip);color:var(--ink);border-radius:4px;padding:1px 5px}
 /* selection bar: floats over the map's bottom edge so the strip never moves */
 #selbar{position:absolute;left:8px;right:8px;bottom:24px;z-index:1000;margin:0 auto;width:fit-content;max-width:calc(100% - 16px);
@@ -212,6 +218,17 @@ body:not(.server) .srv,body.server .nosrv{display:none!important}
     <span class="pop">
       <button class="btn icon" id="helpbtn" title="Help and shortcuts (?)" aria-expanded="false" aria-controls="help">?</button>
       <div class="menu help" id="help" role="dialog" aria-label="Help" hidden>
+        <p class="hh">How do I…</p>
+        <ul class="how">
+          <li><b>Add new photos/videos</b> → drop them anywhere in the trip folder (not <code>_tripmap</code>), then ⋯ → <b>Scan for new files</b>. Restarting the launcher doesn't scan.</li>
+          <li><b>Place an unplaced shot</b> → <b>No location</b> filter → select → the map shows its neighbours → <kbd>[</kbd> / <kbd>]</kbd> or click the map.</li>
+          <li><b>Fix a day or time</b> → select → <b>Move to day…</b> / <b>Shift time</b>.</li>
+          <li><b>Hide a shot</b> → select → <b>Archive</b> (<kbd>A</kbd>). Bring back → <b>Archived</b> filter → <b>Restore</b> (<kbd>Shift</kbd>+<kbd>A</kbd>).</li>
+          <li><b>Change the cover</b> → select one photo → <b>Set as cover</b>.</li>
+          <li><b>Make changes live</b> → <b>Apply to map</b>, then <b>Publish</b>.</li>
+          <li><b>A shot is missing after a scan</b> → check the launcher window. Files with only a date that falls &gt;1 day outside the trip are skipped; anything in <code>_tripmap</code> is ignored.</li>
+        </ul>
+        <p class="hh">Shortcuts</p>
         <p>Click shots to select · Shift-click for a range · Double-click to view.</p>
         <p>With shots selected, click the map or a pin to place them. Drag a pin to move it.</p>
         <p>Selecting a shot shows where it happened: its pin, or the nearest placed shots before and after it.</p>
