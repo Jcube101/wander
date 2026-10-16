@@ -27,7 +27,7 @@ Use `/new-trip`, which follows `docs/runbook.md` → New trip.
 ## Testing
 - Worker: `cd worker && npm test` (node, mocked R2 bucket).
 - tripmap: `python -m unittest discover tripmap/tests` (publish, archive build and serve; exiftool/ffmpeg/rclone/network are stubbed). A full time/location suite is on `ROADMAP.md`.
-- CI (`.github/workflows/test.yml`) runs both on every push to main. After every push, check the run with `gh run list --limit 1` (or `gh run watch`). Fix a red build before doing anything else.
+- CI (`.github/workflows/test.yml`) runs both on every push to main. After every push, check the run with `gh run list --limit 1` (or `gh run watch`). Fix a red build before doing anything else. The runner is pinned to `ubuntu-24.04` (not `ubuntu-latest`) so an image switch can't break CI unannounced; bump it on purpose later, in its own commit, and check the run.
 
 ## Project docs
 - `SPEC.md` — what Wander must do (requirements, non-goals). `ROADMAP.md` — Now / Next / Later.
