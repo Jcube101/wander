@@ -10,7 +10,7 @@
 | Give someone access | Zero Trust → Access → Rule groups → add their email to the trip's crew (or `Wander – All trips`) |
 | Remove someone | Delete their email from the group; optionally Zero Trust → Users → revoke session |
 | Change the site design | Lovable prompt → re-publish in Lovable |
-| Change the editor/builder | Edit in the repo → `viewer.html`: refresh the editor page · `build.py`/`publish.py`: used on the next Apply/Scan/Publish · `serve.py`: restart the launcher window → commit to main |
+| Change the editor/builder | Edit in the repo → `viewer.html`: refresh the editor page · `build.py`/`publish.py`: used on the next Apply/Scan/Publish · `serve.py`: restart the launcher window → commit to main. CI runs the tests on every push; check with `gh run list --limit 1` |
 | Change the Worker | `cd worker && npm test && npx wrangler deploy` |
 
 ## New trip
@@ -51,6 +51,8 @@ The Access app must exist **before** Publish; Access is the only gate. In Claude
 - **Publish: "isn't protected by Cloudflare Access"** → create the trip's Access app (New trip, step 5), or fix its destinations. `--allow-unprotected` skips the check (terminal only).
 - **Publish: "would remove N of M files"** → the mass-delete guard. Check the Archived filter; `--dry-run` lists the files.
 - **Publish: "files trip.json references are missing"** → previews not built yet; run **Scan for new files**.
+- **Publish: "WARNING: R2 storage …"** → the bucket is projected over 8 GB (or over the 10 GB free tier, which costs a few cents/GB/month). The publish still ran. Free space by archiving shots you don't need, or rebuild a trip's previews smaller: add `--crf 30` and/or `--video-height 540` to the build options (in `_tripmap\build_args.json` for the editor's Scan), delete that trip's `_tripmap\media\*.mp4` so they're rebuilt, Scan, then Publish. `--dry-run` shows the projected size first.
+- **Publish: "couldn't check R2 storage"** → only the size check failed; the publish carried on. Retry later.
 - **Publish: `CreateBucket ... 403`** → an rclone call is missing `--s3-no-check-bucket`.
 - **Site shows "This trip is private" for someone who should see it** → check their exact email in the rule group; ask them to sign out (`media.job-joseph.com/cdn-cgi/access/logout`) and back in.
 - **Images missing but trip loads** → something added `crossorigin` to `<img>`/`<video>` in the site.

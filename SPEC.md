@@ -140,7 +140,18 @@ Order matters so the site never points at missing files:
 |---|---|
 | Mass-delete guard | If the delete list is > 20% of the remote previews, stop before step 1 (nothing changed). A trip with no remote files has 0 deletes |
 | `--allow-mass-delete` | Skip that guard (terminal only) |
-| `--dry-run` | Access check + plan printout (upload count, full delete list, whether the guard would stop); changes nothing |
+| `--dry-run` | Access check + plan printout (storage line, upload count, full delete list, whether the guard would stop); changes nothing |
+
+**Storage check** (in the plan, warn only, never blocks): `rclone size` of the whole bucket + local bytes of referenced files not yet on R2 − remote bytes of the delete list. Always prints `R2 storage: X.XX GB now → Y.YY GB after publish (free tier 10 GB)`, and again after `Published.` so the editor's status line shows it.
+
+| Projected (decimal GB) | Output |
+|---|---|
+| ≤ 8 | The line only |
+| > 8 | WARNING: suggest smaller previews (`--crf 30`, `--video-height 540`) or archiving |
+| > 10 | WARNING: over the free tier, it starts costing money |
+| `rclone size` fails | WARNING: couldn't check; the publish carries on |
+
+Thresholds are constants at the top of `publish.py`.
 
 Before the plan, it requests `<slug>/trip.json` with no cookies and follows no redirects. Only 302/401/403 (Access) counts as protected; anything else, or a network error, stops the publish. `--allow-unprotected` skips this (terminal only; the editor never passes it).
 
@@ -175,6 +186,7 @@ One self-hosted app per trip with destinations `media.job-joseph.com/<slug>` and
 | Free tier only | R2 ≤ 10 GB (~2.5 GB/trip); Cloudflare free plans |
 | One copy of the code | Runs from this repo; trip folders hold only a launcher |
 | Client rules | `credentials: 'include'`; no `crossorigin` on `<img>`/`<video>`; nothing in browser storage; times shown in the trip's zone |
+| Tested on every push | GitHub Actions runs the tripmap and Worker suites on each push to main; no real exiftool/ffmpeg/rclone, network or trip drive needed. A red build is fixed first |
 | Privacy in git | No media, overrides, CSVs, trip JSON or coordinates committed |
 
 ## Non-goals

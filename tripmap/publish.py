@@ -42,6 +42,10 @@ MEDIA_HOST = "media.job-joseph.com"
 # What Access answers a visitor without a cookie. The Worker itself never
 # redirects or refuses trip.json, so these mean the trip's Access app exists.
 PROTECTED = (302, 401, 403)
+# R2 storage check: warn only, never blocks a publish. Cloudflare bills decimal GB.
+GB = 1e9
+STORAGE_WARN_GB = 8
+FREE_TIER_GB = 10
 
 
 def log(msg):
@@ -90,13 +94,46 @@ def referenced_files(trip):
 
 
 def remote_previews(dst):
-    """Preview files currently on the remote under <slug>/ ([] for a new trip)."""
-    code, out, err = rclone("lsf", "-R", "--files-only", dst, capture=True)
+    """Preview files currently on the remote under <slug>/, as {path: bytes}
+    ({} for a new trip)."""
+    code, out, err = rclone("lsf", "-R", "--files-only", "--format", "sp", dst, capture=True)
     if code:
         if "directory not found" in err.lower():
-            return []
+            return {}
         sys.exit(f"ERROR: couldn't list {dst}: {err.strip()[:300]}")
-    return sorted(p for p in (l.strip() for l in out.splitlines()) if p.startswith(PREVIEW_DIRS))
+    files = {}
+    for line in out.splitlines():
+        size, _, path = line.strip().partition(";")
+        if path.startswith(PREVIEW_DIRS):
+            files[path] = int(size) if size.isdigit() else 0
+    return dict(sorted(files.items()))
+
+
+def bucket_size(remote):
+    """Bytes used by the whole bucket, or (None, reason) if rclone can't tell."""
+    code, out, err = rclone("size", remote, "--json", capture=True)
+    try:
+        if code:
+            raise ValueError(err.strip()[:200] or f"rclone exit {code}")
+        return int(json.loads(out)["bytes"]), None
+    except (ValueError, KeyError, TypeError) as e:
+        return None, str(e) or type(e).__name__
+
+
+def storage_report(now, upload_bytes, delete_bytes):
+    """The storage line plus a warning (or None) for the projected size."""
+    after = now + upload_bytes - delete_bytes
+    line = f"R2 storage: {now / GB:.2f} GB now → {after / GB:.2f} GB after publish (free tier {FREE_TIER_GB} GB)"
+    if after > FREE_TIER_GB * GB:
+        warn = (f"WARNING: R2 will be over the {FREE_TIER_GB} GB free tier and start costing money "
+                f"(a few cents per GB per month). Archive shots or rebuild smaller previews "
+                f"(--crf 30 or --video-height 540).")
+    elif after > STORAGE_WARN_GB * GB:
+        warn = (f"WARNING: R2 storage is getting close to the {FREE_TIER_GB} GB free tier. Consider smaller "
+                f"previews (--crf 30 or --video-height 540) or archiving shots.")
+    else:
+        warn = None
+    return line, warn
 
 
 def too_many_deletes(deletes, remote_files):
@@ -122,6 +159,10 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="Run the checks and print the plan; change nothing")
     ap.add_argument("-v", "--verbose", action="store_true", help="List every removed file")
     args = ap.parse_args()
+    try:  # a non-UTF-8 console or pipe must never crash a publish over the → in a log line
+        sys.stdout.reconfigure(errors="replace")
+    except (AttributeError, ValueError):
+        pass
 
     if not shutil.which("rclone"):
         sys.exit("rclone isn't installed or not on PATH. Install it with: winget install Rclone.Rclone")
@@ -155,6 +196,18 @@ def main():
     uploads = [r for r in refs if r not in set(missing)]
     remote_files = remote_previews(dst)
     deletes = sorted(set(remote_files) - set(refs))
+    # Bucket size after this publish: new files go up, unused ones come off.
+    # Files already on R2 are replaced, so they're counted as no change.
+    now, why = bucket_size(remote)
+    storage = []
+    if now is None:
+        log(f"WARNING: couldn't check R2 storage ({why}); publishing anyway.")
+    else:
+        up_bytes = sum((out / r).stat().st_size for r in uploads if r not in remote_files)
+        line, warn = storage_report(now, up_bytes, sum(remote_files[d] for d in deletes))
+        storage = [line] + ([warn] if warn else [])
+        for s in storage:
+            log(s)
     if missing:
         log(f"WARNING: {len(missing)} file(s) trip.json references are missing from {out} "
             f"(not uploaded; run Scan for new files): " + ", ".join(missing))
@@ -262,6 +315,8 @@ def main():
                  f"The site no longer shows them; publish again to retry.")
     log(f"Published. {trip['counts']['items']} shots live under {slug}/ "
         f"({len(trips)} trip{'s' if len(trips) != 1 else ''} in the archive).")
+    for s in storage:  # again, so it's in the editor's last log lines
+        log(s)
 
 
 if __name__ == "__main__":

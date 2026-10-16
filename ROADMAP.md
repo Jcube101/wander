@@ -11,6 +11,8 @@ Size: **S** ≈ an evening, **M** ≈ a weekend, **L** ≈ several sessions. Kno
 - [x] **Lovable site:** landing + trip pages, gallery, map, timeline, viewer, play journey.
 - [x] **Stale bucket objects removed:** early-publish `trip.js` / `index.html` deleted from R2.
 - [x] **Archive in the editor:** hide shots from the published trip (removed from R2), kept locally; Restore puts them back.
+- [x] **GitHub Actions:** tripmap and Worker tests on every push to main.
+- [x] **R2 storage check:** `publish.py` projects the bucket size and warns above 8 GB and 10 GB (never blocks).
 - [x] **Run from the repo:** one-file launcher per trip folder; one-click Apply / Scan / Publish.
 
 ## Now
@@ -18,8 +20,6 @@ Size: **S** ≈ an evening, **M** ≈ a weekend, **L** ≈ several sessions. Kno
 | Item | Why | Size | Depends on |
 |---|---|---|---|
 | pytest suite for tripmap (fixture trip, stubbed exiftool/ffmpeg/rclone) | Time/location rules are subtle; no tests today | M | — |
-| GitHub Actions: worker tests (tripmap tests once they exist) | Catch Worker regressions before deploy | S | pytest for the tripmap half |
-| R2 budget check in `publish.py` (warn near 10 GB) | Each trip is ~2.5 GB; the 4th trip could leave the free tier | S | — |
 
 ## Next
 

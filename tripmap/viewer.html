@@ -125,7 +125,8 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
 .pin.arch{opacity:.45}
 #status{color:var(--muted);max-width:520px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:help}
 #status.err{white-space:normal;max-width:none;flex-basis:100%;order:99;font-size:12px}
-#status.ok{color:#2fb171}#status.err{color:#d9534f}
+#status.warn{white-space:normal;max-width:none;flex-basis:100%;order:99;font-size:12px}
+#status.ok{color:#2fb171}#status.err{color:#d9534f}#status.warn{color:#d9a400}
 .srv{display:none}body.server .srv{display:inline-flex}body.server .nosrv{display:none}
 </style>
 </head>
@@ -550,7 +551,13 @@ body.placing .leaflet-interactive,body.placing .leaflet-marker-icon{cursor:copy!
         const last = (s.log || []).filter(Boolean).slice(-1)[0] || '';
         status(`${label}… ${last}`);
         if (!s.building) {
-          if (s.exit === 0 && mode === 'publish') status((s.log||[]).filter(Boolean).slice(-1)[0] || 'Published', 'ok');
+          if (s.exit === 0 && mode === 'publish') {
+            const lines = (s.log||[]).filter(Boolean);
+            const done = lines.find(l => /^Published\./.test(l)) || lines.slice(-1)[0] || 'Published';
+            const size = lines.find(l => /^R2 storage:/.test(l));
+            const warn = lines.find(l => /^WARNING: R2/.test(l));
+            status([done, size, warn].filter(Boolean).join(' · '), warn ? 'warn' : 'ok', lines.slice(-12).join('\n'));
+          }
           else if (s.exit === 0) { status('Done — reloading', 'ok'); setTimeout(() => location.reload(), 500); }
           else {
             const lines = (s.log||[]).filter(Boolean);

@@ -57,10 +57,12 @@ class CheckProtected(unittest.TestCase):
 
 
 class FakeRclone:
-    """Records calls by step name; serves a fake remote listing."""
+    """Records calls by step name; serves a fake remote listing (1 byte per
+    file unless `remote` is a {path: bytes} dict) and bucket size."""
 
-    def __init__(self, remote=(), fail=()):
-        self.remote, self.fail = list(remote), set(fail)
+    def __init__(self, remote=(), fail=(), bucket=0):
+        self.remote = dict(remote) if isinstance(remote, dict) else {p: 1 for p in remote}
+        self.fail, self.bucket = set(fail), bucket
         self.steps, self.lists = [], {}
 
     def __call__(self, *args, stdin=None, capture=False):
@@ -74,7 +76,9 @@ class FakeRclone:
         if cmd in self.fail:
             return 1, "", "boom"
         if cmd == "lsf":
-            return 0, "".join(p + "\n" for p in self.remote), ""
+            return 0, "".join(f"{n};{p}\n" for p, n in self.remote.items()), ""
+        if cmd == "size":
+            return 0, json.dumps({"count": len(self.remote), "bytes": self.bucket}), ""
         if cmd == "cat":
             return 1, "", "not found"
         return 0, "", ""
@@ -150,7 +154,7 @@ class Publish(unittest.TestCase):
     def test_step_order_trip_json_before_deletes(self):
         rc = FakeRclone(remote=self.refs + ["thumbs/archived.jpg"])
         self.run_main(rc)
-        self.assertEqual(rc.steps[:4], ["lsf", "copy-previews", "copy-data", "delete"])
+        self.assertEqual(rc.steps[:5], ["lsf", "size", "copy-previews", "copy-data", "delete"])
         self.assertEqual(rc.steps[-1], "rcat")
 
     def test_verbose_lists_removed_names(self):
@@ -179,7 +183,7 @@ class Publish(unittest.TestCase):
         stale = [f"thumbs/old{i}.jpg" for i in range(8)]  # 8 of 38 = 21%
         rc = FakeRclone(remote=self.refs + stale)
         code, _ = self.run_main(rc)
-        self.assertEqual(rc.steps, ["lsf"])
+        self.assertEqual(rc.steps, ["lsf", "size"])
         self.assertIn("would remove 8 of 38", code)
         self.assertIn("Nothing was changed", code)
 
@@ -230,7 +234,7 @@ class Publish(unittest.TestCase):
         rc = FakeRclone(remote=self.refs + ["thumbs/archived.jpg"])
         code, out = self.run_main(rc, "--dry-run")
         self.assertIsNone(code)
-        self.assertEqual(rc.steps, ["lsf"])
+        self.assertEqual(rc.steps, ["lsf", "size"])
         self.assertIn(f"upload: {len(self.refs)} referenced files", out)
         self.assertIn("remove: 1 of 31", out)
         self.assertIn("thumbs/archived.jpg", out)
@@ -239,8 +243,58 @@ class Publish(unittest.TestCase):
         rc = FakeRclone(remote=self.refs + [f"thumbs/old{i}.jpg" for i in range(10)])
         code, out = self.run_main(rc, "--dry-run")
         self.assertIsNone(code)
-        self.assertEqual(rc.steps, ["lsf"])
+        self.assertEqual(rc.steps, ["lsf", "size"])
         self.assertIn("would STOP", out)
+
+    # --- R2 storage check
+    def test_storage_line_in_dry_run(self):
+        rc = FakeRclone(remote=self.refs, bucket=3_000_000_000)
+        code, out = self.run_main(rc, "--dry-run")
+        self.assertIsNone(code)
+        self.assertEqual(rc.steps, ["lsf", "size"])
+        self.assertIn("R2 storage: 3.00 GB now → 3.00 GB after publish (free tier 10 GB)", out)
+        self.assertNotIn("WARNING: R2", out)
+
+    def test_storage_projection_counts_new_uploads_and_deletes(self):
+        # i0's previews (2 bytes each locally) aren't on R2 yet; a 0.5 GB stale file goes
+        for d in ("thumbs", "cards", "media"):
+            (self.out / d / "i0.jpg").write_bytes(b"xx")
+        remote = {r: 1 for r in self.refs if "/i0." not in r}
+        remote["media/old.mp4"] = 500_000_000
+        rc = FakeRclone(remote=remote, bucket=2_000_000_000)
+        with mock.patch.object(publish, "storage_report", wraps=publish.storage_report) as sr:
+            code, out = self.run_main(rc, "--dry-run")
+        self.assertIsNone(code)
+        sr.assert_called_once_with(2_000_000_000, 6, 500_000_000)  # files already on R2 count 0
+        self.assertIn("2.00 GB now → 1.50 GB after publish", out)
+
+    def test_storage_thresholds(self):
+        gb = publish.GB
+        self.assertIsNone(publish.storage_report(7 * gb, int(gb), 0)[1])  # exactly 8: no warning
+        near = publish.storage_report(7 * gb, int(1.5 * gb), 0)[1]
+        self.assertIn("close to the 10 GB free tier", near)
+        self.assertIn("--crf 30", near)
+        self.assertIn("--video-height 540", near)
+        over = publish.storage_report(9.5 * gb, int(gb), 0)[1]
+        self.assertIn("start costing money", over)
+        self.assertNotIn("close to", over)
+        self.assertIsNone(publish.storage_report(11 * gb, 0, int(4 * gb))[1])  # deletes bring it under
+
+    def test_storage_warning_repeated_after_publish(self):
+        rc = FakeRclone(remote=self.refs, bucket=int(9 * publish.GB))
+        code, out = self.run_main(rc)
+        self.assertIsNone(code)
+        tail = out.split("Published.", 1)[1]
+        self.assertIn("R2 storage: 9.00 GB now", tail)
+        self.assertIn("WARNING: R2 storage is getting close", tail)
+
+    def test_failed_size_check_does_not_block(self):
+        rc = FakeRclone(remote=self.refs, fail=["size"])
+        code, out = self.run_main(rc)
+        self.assertIsNone(code)
+        self.assertIn("WARNING: couldn't check R2 storage (boom)", out)
+        self.assertIn("rcat", rc.steps)
+        self.assertNotIn("R2 storage:", out)
 
     def test_dry_run_still_runs_access_guard(self):
         rc = FakeRclone()
@@ -252,7 +306,7 @@ class Publish(unittest.TestCase):
 class RemoteListing(unittest.TestCase):
     def test_new_trip_directory_not_found_is_empty(self):
         with mock.patch.object(publish, "rclone", return_value=(3, "", "error listing: directory not found")):
-            self.assertEqual(publish.remote_previews("r2:trip-media/new"), [])
+            self.assertEqual(publish.remote_previews("r2:trip-media/new"), {})
 
     def test_other_listing_errors_stop(self):
         with mock.patch.object(publish, "rclone", return_value=(1, "", "AccessDenied")):
@@ -260,10 +314,15 @@ class RemoteListing(unittest.TestCase):
                 publish.remote_previews("r2:trip-media/x")
 
     def test_only_preview_folders_count(self):
-        listing = "trip.json\nthumbs/a.jpg\ncards/a.jpg\nmedia/a.mp4\nindex.html\n"
+        listing = "5;trip.json\n10;thumbs/a.jpg\n20;cards/a.jpg\n300;media/a.mp4\n7;index.html\n"
         with mock.patch.object(publish, "rclone", return_value=(0, listing, "")):
             self.assertEqual(publish.remote_previews("r2:trip-media/x"),
-                             ["cards/a.jpg", "media/a.mp4", "thumbs/a.jpg"])
+                             {"cards/a.jpg": 20, "media/a.mp4": 300, "thumbs/a.jpg": 10})
+
+    def test_bucket_size_bad_output_is_none(self):
+        for rv in ((1, "", "AccessDenied"), (0, "not json", ""), (0, "{}", "")):
+            with self.subTest(rv=rv), mock.patch.object(publish, "rclone", return_value=rv):
+                self.assertIsNone(publish.bucket_size("r2:trip-media")[0])
 
 
 if __name__ == "__main__":

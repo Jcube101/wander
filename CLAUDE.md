@@ -26,7 +26,8 @@ Use `/new-trip`, which follows `docs/runbook.md` → New trip.
 
 ## Testing
 - Worker: `cd worker && npm test` (node, mocked R2 bucket).
-- tripmap: `python -m unittest discover tripmap/tests` (only the publish Access guard so far; full suite is on `ROADMAP.md`). The rest was verified against a fixture trip folder with a stubbed exiftool/rclone.
+- tripmap: `python -m unittest discover tripmap/tests` (publish, archive build and serve; exiftool/ffmpeg/rclone/network are stubbed). A full time/location suite is on `ROADMAP.md`.
+- CI (`.github/workflows/test.yml`) runs both on every push to main. After every push, check the run with `gh run list --limit 1` (or `gh run watch`). Fix a red build before doing anything else.
 
 ## Project docs
 - `SPEC.md` — what Wander must do (requirements, non-goals). `ROADMAP.md` — Now / Next / Later.
