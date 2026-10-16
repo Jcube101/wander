@@ -192,6 +192,31 @@ Never uploaded: anything `trip.json` doesn't reference, including `trip.js`, `in
 
 One self-hosted app per trip with destinations `media.job-joseph.com/<slug>` and `media.job-joseph.com/auth/<slug>`. Allow policy = trip crew OR All trips. One-time PIN login.
 
+### Access scripting (`tripmap/access.py`)
+
+Manages the above through the Cloudflare API, so onboarding needs no dashboard clicks.
+
+| Command | Effect |
+|---|---|
+| `setup <slug> "<Title>"` | Crew group `Wander – <Trip> crew`, reusable policy `Wander – <Trip> viewers`, app `Wander – <Title>`. `<Trip>` = title minus a trailing year (`--trip` overrides). Names use an en dash (U+2013) |
+| `add <slug\|all> <email>` | Add to the trip's crew, or to `Wander – All trips` |
+| `remove <slug\|all> <email>` | Remove; `--revoke` also ends that person's Access sessions (`revoke_user`) |
+| `list <slug\|all>` | Members; for a slug also the app's destinations, policy and session lengths |
+
+| Rule | Behaviour |
+|---|---|
+| Mirrors Thailand | App: destinations above, `domain` = the first, One-time PIN as the only IdP, no auto-redirect, App Launcher hidden, session 24 h, Thailand's cookie settings. Policy: allow, include crew OR All trips, no exclude/require, session 730 h. Constants at the top of `access.py`; `setup thailand-2026 "Thailand 2026" --dry-run` must differ only in the app's name |
+| Idempotent | Group/policy found by exact name; app by destination first (the Thailand app is named `media`), then name. Matches → "Nothing to change". Differences print as `field: live -> expected` and are written only after y/N (or `--yes`). Updates GET the live object, change only managed fields and PUT the whole object back |
+| Never deletes | No app, policy or group is ever deleted; that stays a dashboard action. Two apps on one slug → error |
+| Empty group | Holds the rule `nobody@wander.invalid` (can't exist); removing the last member puts it back. Hidden in `list` |
+| Guardrails | Before any POST/PUT: groups may hold only email rules; policies only rule-group rules with decision `allow`; apps only reference reusable policies by id. Anything else (everyone, service tokens, IP ranges, email domains, bypass, non_identity…) is refused loudly (exit 3), and setup/add/remove also refuse when a live group already holds such a rule |
+| Idempotent members | Adding an existing member or removing a missing one writes nothing and says so. Emails compared lowercase |
+| Confirmation | `setup` and `remove` ask y/N unless `--yes`; with no terminal the answer is no. Every write command has `--dry-run` (GETs only) |
+| After setup | Runs the publish guard's check on `<slug>/trip.json` and prints it (302/401/403 = protected) |
+| Credentials | `CF_API_TOKEN`, `CF_ACCOUNT_ID` from the environment, else `%USERPROFILE%\.wander\cloudflare.env` (outside the repo). Missing → prints how to create the token: two Account permissions, `Access: Apps and Policies` and `Access: Organizations, Identity Providers, and Groups` (Edit), nothing broader; exit 2 |
+| Token handling | Sent only in the `Authorization` header; never printed, logged or committed (API error text is scrubbed too). Claude Code never reads the file |
+| Emails | May appear in terminal output; never in the repo, docs, test fixtures (use `@example.com`) or commit messages |
+
 ## Non-functional requirements
 
 | Requirement | How it's kept |

@@ -1,5 +1,5 @@
 ---
-description: Start a new Wander trip (preflight, quick build, launcher), then hand Job the Access + publish checklist
+description: Start a new Wander trip (preflight, quick build, launcher, Access after Job's yes), then hand Job the publish checklist
 argument-hint: "<trip folder>" "<Title>" <+HH:MM tz> [camera offset +HH:MM]
 ---
 
@@ -14,6 +14,7 @@ The procedure is **docs/runbook.md → "New trip"**. Read it now and follow it; 
 - **Never run the full build** (no build without `--quick`). It can take hours; Job runs it with the editor's **Scan for new files**.
 - **Never write emails, coordinates, file paths from the trip, or trip data into the repo**, and don't paste coordinates into chat. Counts and filenames are fine in the report.
 - Scratch scripts go in your scratchpad, not the repo.
+- **Access writes only after Job says yes** to the dry-run plan in this conversation. Never read `%USERPROFILE%\.wander\cloudflare.env`; `access.py` loads it itself.
 
 ## Do: runbook steps 1–3
 1. **Preflight.** Check each tool and Pillow, and that the slug isn't in `trips.json`. If the slug exists, stop and ask whether this is a republish.
@@ -25,14 +26,17 @@ The procedure is **docs/runbook.md → "New trip"**. Read it now and follow it; 
    - **Camera offset check:** for each DJI clip, find the nearest phone photo with a firm time (`tsrc` in `exif+offset`, `gps-time`) and note the signed gap. Report the median gap and the per-day medians. A median beyond ~30 min, or a consistent same-sign gap, means the offset is probably off. Suggest a corrected `--camera-offset` (current offset + median gap, rounded to 15 min) and offer to re-run step 2 with it. If there are no DJI clips or no firm-time phone photos, say the check can't be done.
 3. **Launcher.** Copy `tripmap\Open Wander Editor.bat` into the trip folder (next to the media, not inside `_tripmap`).
 
+## Step 5: Access (after Job's yes)
+5. Run `python tripmap/access.py setup <slug> "<Title>" --dry-run` (add `--trip "<Trip>"` if `<Trip>` isn't the title minus its year). Show Job the plan verbatim and ask whether to apply it.
+   - Only on an explicit yes: run the same command with `--yes` instead of `--dry-run`, and report its output, including the final `Access check:` line.
+   - If it prints the token instructions (exit 2), pass them on and skip this step; it goes on the checklist instead.
+   - `REFUSED` or `ERROR`: report it and stop; don't work around it.
+   - Don't add crew members here; Job adds them with `access.py add`.
+
 ## Then STOP and give Job this checklist
 Fill in the real `<Title>`, `<Trip>`, `<slug>`. Take the wording from runbook steps 4–7:
 
+- [ ] **Crew:** `python tripmap/access.py add <slug> <email>` for each person (`list <slug>` to check). If step 5 was skipped: `access.py setup <slug> "<Title>" --dry-run`, then without `--dry-run`.
 - [ ] **4. Edit + full build:** double-click `Open Wander Editor.bat` → fix things → Apply to map → **Scan for new files**.
-- [ ] **5. Access (Zero Trust):**
-  - rule group `Wander – <Trip> crew` (add the crew's emails there, not here)
-  - self-hosted app `Wander – <Title>`; destinations `media.job-joseph.com/<slug>` and `media.job-joseph.com/auth/<slug>`
-  - Allow policy `Wander – <Trip> viewers` = `Wander – <Trip> crew` OR `Wander – All trips`
-  - One-time PIN; App Launcher off
 - [ ] **6. Publish** from the editor (it refuses until step 5 is done).
 - [ ] **7. Check:** `curl -sI https://media.job-joseph.com/<slug>/trip.json` → 302/401/403, never 200; then incognito sign-in test.

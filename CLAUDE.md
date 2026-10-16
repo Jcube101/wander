@@ -13,6 +13,7 @@ The website itself is NOT in this repo: it's the Lovable project synced to `Jcub
 - **Privacy:** never commit media, `_tripmap/`, `overrides.json`, `clip_locations.csv`, any `trip.json`/`trips.json`, or coordinates. `.gitignore` enforces this — don't weaken it.
 - **Access lives in Cloudflare Zero Trust**, not in code. The Worker never decides *who* may see a trip; it only serves an allow-list of file types. Each trip = one Access app covering `media.job-joseph.com/<slug>` and `/auth/<slug>`.
 - **Worker path handling:** keys are used exactly as sent; any `%`-encoding, `..` or `//` is refused so Access and the Worker can't disagree about paths. Keep it that way.
+- **Cloudflare API token** lives in `%USERPROFILE%\.wander\cloudflare.env`, read only by `tripmap/access.py`. Never read, print or commit it; never write Access changes without Job's yes to the `--dry-run` plan.
 - **Never upload `trip.js` or `index.html`** to R2 — `trip.js` contains local folder paths. `publish.py` excludes them; the Worker refuses them anyway.
 - **rclone key is bucket-scoped** → every rclone call needs `--s3-no-check-bucket` (already in `publish.py`).
 - Don't add a database. Identity = Cloudflare Access cookie; data = static JSON in R2.
@@ -26,7 +27,7 @@ Use `/new-trip`, which follows `docs/runbook.md` → New trip.
 
 ## Testing
 - Worker: `cd worker && npm test` (node, mocked R2 bucket).
-- tripmap: `python -m unittest discover tripmap/tests` (time/location rules, archive, cover, publish, serve; exiftool/ffmpeg/rclone/network are stubbed). `test_build_rules.py` locks in current time/location behaviour: if a change there is intended, update the test with it.
+- tripmap: `python -m unittest discover tripmap/tests` (time/location rules, archive, cover, publish, serve, access; exiftool/ffmpeg/rclone/network and the Cloudflare API are stubbed). `test_build_rules.py` locks in current time/location behaviour: if a change there is intended, update the test with it.
 - CI (`.github/workflows/test.yml`) runs both on every push to main. After every push, check the run with `gh run list --limit 1` (or `gh run watch`). Fix a red build before doing anything else. The runner is pinned to `ubuntu-24.04` (not `ubuntu-latest`) so an image switch can't break CI unannounced; bump it on purpose later, in its own commit, and check the run.
 
 ## Project docs

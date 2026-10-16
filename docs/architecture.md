@@ -46,4 +46,4 @@ All calls use `--s3-no-check-bucket` (bucket-scoped key can't CreateBucket).
 Allow-list regex for servable keys; refuses `%`, `..`, `//`; never lists the bucket. Protected responses are `Cache-Control: private`. CORS with credentials only for known site origins; public paths also answer `*` without credentials.
 
 ### Access (Cloudflare Zero Trust)
-Rule groups per audience (`Wander – All trips`, `Wander – <Trip> crew`); one self-hosted app per trip with two destinations (`/<slug>`, `/auth/<slug>`) and an Allow policy including the trip crew OR All trips. One-time PIN login.
+Rule groups per audience (`Wander – All trips`, `Wander – <Trip> crew`); one self-hosted app per trip with two destinations (`/<slug>`, `/auth/<slug>`) and an Allow policy including the trip crew OR All trips. One-time PIN login. Managed with `tripmap/access.py` (Cloudflare API; token outside the repo); the dashboard is the fallback.

@@ -23,7 +23,8 @@ In PowerShell, set this once per window: `$W = "C:\Users\jobjo\Github\wander\tri
    ```
    Check the line starting `clip CSV columns ->` if you use a `clip_locations.csv`. The full build makes 1600px photos and 720p video previews (from DJI `.LRF` proxies when present). Re-running skips anything already built, so you can stop and resume.
 2. **Add the launcher:** copy `Open Wander Editor.bat` from this folder into the trip folder (next to the photos, not inside `_tripmap`). If the repo isn't at `C:\Users\jobjo\Github\wander`, edit the `WANDER=` line in it.
-3. Double-click it, fix things, **Apply to map**, **Publish**. Then set up the trip's Cloudflare Access app (see `docs/runbook.md`).
+3. **Access before Publish:** `python "$W\access.py" setup <slug> "<Trip title>" --dry-run`, check the plan, then run it again without `--dry-run`. Add people with `python "$W\access.py" add <slug> <email>` (see `docs/runbook.md`).
+4. Double-click the launcher, fix things, **Apply to map**, **Publish** (it refuses until step 3 is done).
 
 ## Options
 

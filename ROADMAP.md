@@ -16,6 +16,7 @@ Size: **S** ≈ an evening, **M** ≈ a weekend, **L** ≈ several sessions. Kno
 - [x] **GitHub Actions:** tripmap and Worker tests on every push to main.
 - [x] **R2 storage check:** `publish.py` projects the bucket size and warns above 8 GB and 10 GB (never blocks).
 - [x] **Run from the repo:** one-file launcher per trip folder; one-click Apply / Scan / Publish.
+- [x] **Access scripting:** `tripmap/access.py` (setup / add / remove / list) via the Cloudflare API, mirroring the Thailand app; guardrails, never deletes; `/new-trip` applies step 5 after a yes.
 
 ## Now
 
@@ -23,10 +24,7 @@ Nothing in progress; pick from Next.
 
 ## Next
 
-| Item | Why | Size | Depends on |
-|---|---|---|---|
-| Script Access groups/apps via the Cloudflare API | Onboarding is manual clicking in Zero Trust; would let `/new-trip` do runbook step 5 too | M | API token kept outside the repo |
-| Batch "new trip" bootstrap command | Build + launcher + publish + Access in one go | M | Access scripting |
+Nothing queued; see Later.
 
 ## Later
 
