@@ -17,6 +17,7 @@ Hard-won lessons. Each one: **symptom → cause → fix/rule**. Add new ones her
 | Symptom | Cause | Fix / rule |
 |---|---|---|
 | `CreateBucket ... 403` on publish | Bucket-scoped key can't create buckets, and rclone checks by default | Every rclone call gets `--s3-no-check-bucket` |
+| Archived files would have stayed on R2 | `rclone sync` keeps destination files that were excluded (unless `--delete-excluded`) | Never rely on excludes for removal: upload only what `trip.json` references and delete the rest explicitly |
 | ETA said 23 h | rclone's early estimate is noise | Ignore it; 2.3 GB took ~10 min |
 
 ## Metadata

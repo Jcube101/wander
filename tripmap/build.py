@@ -466,7 +466,9 @@ def main():
         it["_proxy"] = proxies.get((str(src.parent).lower(), src.stem.lower()))
         items.append(it)
 
-    # Manual overrides win over everything (value null = deliberately no location)
+    # Manual overrides win over everything (value null = deliberately no location).
+    # "archived" hides a shot from the published trip; it stays local and still
+    # counts for day numbers, trip dates and as a location anchor.
     n_ov = 0
     for x in items:
         if x["rel"] in overrides:
@@ -485,6 +487,8 @@ def main():
                 x["loc"] = "cleared"
             if v.get("t") is not None:
                 x["t"], x["tsrc"] = int(v["t"]), "manual"
+            if v.get("archived"):
+                x["archived"] = True
             n_ov += 1
     if overrides and n_ov < len(overrides):
         log(f"  note: {len(overrides) - n_ov} overrides didn't match any file (renamed or moved?)")
@@ -530,7 +534,7 @@ def main():
     days = []
     for d in day_keys:
         n = (d - first).days + 1
-        cnt = sum(1 for x in items if local_day(x["t"]) == d)
+        cnt = sum(1 for x in items if local_day(x["t"]) == d and not x.get("archived"))
         days.append({"key": d.isoformat(), "n": n, "count": cnt})
     for x in items:
         x["day"] = local_day(x["t"]).isoformat()
@@ -625,13 +629,21 @@ def main():
 
     # Public data for the website (no local folder paths or camera details)
     PUBLIC = ("id", "type", "t", "day", "lat", "lon", "loc", "conf", "dur", "orig", "thumb", "card", "ar", "media")
-    pub_items = [{k: y[k] for k in PUBLIC if y.get(k) is not None} for y in clean]
+    # Archived shots are left out entirely; day numbers and trip dates still come
+    # from every shot, so archiving never renumbers days.
+    pub_items = [{k: y[k] for k in PUBLIC if y.get(k) is not None} for y in clean if not y.get("archived")]
+    pub_days = [d for d in days if d["count"]]
     day_n = {d["key"]: d["n"] for d in days}
     for y in pub_items:
         y["dayN"] = day_n.get(y["day"])
-    covers = [y for y in pub_items if y["type"] == "photo" and y.get("card") and y.get("lat") is not None] \
-        or [y for y in pub_items if y.get("card")]
-    cover = covers[len(covers) // 2]["card"] if covers else None
+
+    def pick_cover(cands):
+        # Middle of all candidates (archived included, so the pick stays put); if
+        # that shot is archived, the next eligible one after it, then before it.
+        mid = len(cands) // 2
+        return next((y["card"] for y in cands[mid:] + cands[:mid][::-1] if not y.get("archived")), None)
+    cover = pick_cover([y for y in clean if y["type"] == "photo" and y.get("card") and y.get("lat") is not None]) \
+        or pick_cover([y for y in clean if y.get("card")])
     public = {
         "version": 1,
         "title": title,
@@ -644,7 +656,7 @@ def main():
         "counts": {"items": len(pub_items), "photos": sum(1 for y in pub_items if y["type"] == "photo"),
                    "videos": sum(1 for y in pub_items if y["type"] == "video"),
                    "onMap": sum(1 for y in pub_items if y.get("lat") is not None)},
-        "days": days,
+        "days": pub_days,
         "items": pub_items,
     }
     (out / "trip.json").write_text(json.dumps(public, separators=(",", ":")), encoding="utf-8")
@@ -658,6 +670,9 @@ def main():
     log("\nDone.")
     log(f"  items: {len(clean)}  ({len(photos)} photos, {len(videos)} videos) across {len(days)} days")
     log(f"  on the map: {placed}   location source: {by_loc}")
+    n_arch = sum(1 for x in clean if x.get("archived"))
+    if n_arch:
+        log(f"  archived (kept locally, not published): {n_arch}")
     log(f"  bundle size: {size/1e9:.2f} GB  ->  {out}")
     if unknown_time:
         log(f"  skipped (no usable time): {len(unknown_time)} e.g. {unknown_time[:3]}")

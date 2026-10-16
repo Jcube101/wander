@@ -74,14 +74,14 @@ Items with no usable time are skipped and listed. Date-only items more than a da
 1. EXIF GPS → `loc: gps`
 2. `clip_locations.csv` → `loc: csv` (+ its `conf`)
 3. `overrides.json` → `manual` or `cleared`
-4. Still unplaced → nearest `gps`/`manual` shot within the window → `loc: matched`, `conf` high ≤10 min, medium ≤30 min, else low. Never for CSV rows, `cleared` items or WhatsApp media.
+4. Still unplaced → nearest `gps`/`manual` shot (archived ones included) within the window → `loc: matched`, `conf` high ≤10 min, medium ≤30 min, else low. Never for CSV rows, `cleared` items or WhatsApp media.
 
 **Outputs**
 - 200 px thumbs, 640 px cards, 1600 px photo previews, 720p H.264 video previews (from DJI `.LRF` proxies when present).
 - Incremental: existing outputs are skipped, so builds can stop and resume.
 - Photos that fail in parallel are retried one at a time; failures go to `build_errors.txt`.
 - `trip.js` + `index.html`: local editor only (contain paths).
-- `trip.json`: public contract, no paths or camera details.
+- `trip.json`: public contract, no paths or camera details. Archived shots are left out (see Archive).
 - `build_args.json`: remembered options so the editor can re-run the build.
 - Prints the bundle size.
 
@@ -94,12 +94,30 @@ Keyed by path relative to the trip folder. Saved as `{version: 2, trip, saved, o
 | `{"lat": .., "lon": ..}` | Manual location (`loc: manual`); also an anchor for matching |
 | `{"noloc": true}` or `null` | Deliberately unplaced (`loc: cleared`); never auto-matched |
 | `{"t": <unix s>}` | Manual time; combinable with either of the above |
+| `{"archived": true}` | Hidden from the published trip; combinable with all of the above. Restore removes the field |
 
 Manual values beat every other source. Overrides that match no file are reported (renamed or moved).
 
+### Archive
+
+Hide a shot from the published trip without deleting anything.
+
+| Where | Behaviour |
+|---|---|
+| `trip.js` (editor) | Archived shots included, `archived: true`; dimmed in the strip, hidden on the map except in the Archived filter |
+| `trip.json` (public) | Archived shots left out; counts exclude them; a day with only archived shots is left out |
+| Days and dates | Day numbers and `start`/`end` come from all shots, so archiving never renumbers days |
+| Location matching | Archived GPS/manual shots still anchor nearby shots (local maths only) |
+| Cover | Middle eligible shot of all shots; if it's archived, the next eligible one (then the previous) |
+| Local files | Originals and `_tripmap/` previews are never deleted; Scan keeps building them |
+| R2 | Publish removes the archived shot's previews; Restore + Publish uploads them again |
+
+No `trip.json` schema change: the [data contract](docs/data-contract.md) already allows day gaps.
+
 ### Editor (`serve.py` + `viewer.html?edit`)
 
-- **Filters:** All / Needs review (not `gps` or `manual`) / No location.
+- **Filters:** All (not archived) / Needs review (not `gps` or `manual`) / No location / Archived (n).
+- **Archive / Restore** the selection (keys **A** / **Shift+A**). Archived shots can still be placed, moved and re-timed.
 - **Select:** click, Shift-click range, double-click to view.
 - **Place:** click map or pin to place the selection; drag a pin; Remove location.
 - **Day/time:** Move to day (keeps clock time), Shift time (`-1:30`, `+2`).
@@ -111,13 +129,22 @@ Manual values beat every other source. Overrides that match no file are reported
 ### Publish (`tripmap/publish.py`)
 
 Order matters so the site never points at missing files:
-1. `rclone sync` thumbs/cards/media → `<slug>/`, `Cache-Control: public, max-age=604800`. Only new or changed files.
+
+0. **Plan** (read-only): referenced = every `thumb`/`card`/`media` (+ cover) in `trip.json`; remote = `rclone lsf` of `<slug>/thumbs|cards|media/`; delete = remote − referenced. Referenced files missing locally are listed as a warning and skipped.
+1. `rclone copy --files-from` the referenced previews → `<slug>/`, `Cache-Control: public, max-age=604800`. Only new or changed files; never deletes.
 2. `rclone copy` `trip.json`, `no-cache`.
-3. Copy covers to `public/covers/` (640 px card + 1600 px hero when the cover is a photo), merge this trip into `trips.json` (newest first, `no-cache`).
+3. `rclone delete --files-from` the delete list. Runs only if 1 and 2 succeeded. Prints the count (names with `--verbose`). A failure here still lets step 4 run, then exits with an error.
+4. Copy covers to `public/covers/` (640 px card + 1600 px hero when the cover is a photo), merge this trip into `trips.json` (newest first, `no-cache`).
 
-Before step 1, it requests `<slug>/trip.json` with no cookies and follows no redirects. Only 302/401/403 (Access) counts as protected; anything else, or a network error, stops the publish. `--allow-unprotected` skips this (terminal only; the editor never passes it).
+| Switch | Effect |
+|---|---|
+| Mass-delete guard | If the delete list is > 20% of the remote previews, stop before step 1 (nothing changed). A trip with no remote files has 0 deletes |
+| `--allow-mass-delete` | Skip that guard (terminal only) |
+| `--dry-run` | Access check + plan printout (upload count, full delete list, whether the guard would stop); changes nothing |
 
-Never uploaded: `trip.js`, `index.html`, `build_args.json`, `build_errors.txt`, `*.part.mp4`. Every rclone call has `--s3-no-check-bucket`.
+Before the plan, it requests `<slug>/trip.json` with no cookies and follows no redirects. Only 302/401/403 (Access) counts as protected; anything else, or a network error, stops the publish. `--allow-unprotected` skips this (terminal only; the editor never passes it).
+
+Never uploaded: anything `trip.json` doesn't reference, including `trip.js`, `index.html`, `build_args.json`, `build_errors.txt`, `*.part.mp4` and archived shots' previews. Every rclone call has `--s3-no-check-bucket`.
 
 ### Worker (`worker/src/index.js`)
 

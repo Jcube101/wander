@@ -10,6 +10,7 @@ Size: **S** ≈ an evening, **M** ≈ a weekend, **L** ≈ several sessions. Kno
 - [x] **Per-trip Access:** rule groups, one app per trip, sign-in flow, lock badges.
 - [x] **Lovable site:** landing + trip pages, gallery, map, timeline, viewer, play journey.
 - [x] **Stale bucket objects removed:** early-publish `trip.js` / `index.html` deleted from R2.
+- [x] **Archive in the editor:** hide shots from the published trip (removed from R2), kept locally; Restore puts them back.
 - [x] **Run from the repo:** one-file launcher per trip folder; one-click Apply / Scan / Publish.
 
 ## Now
@@ -24,7 +25,6 @@ Size: **S** ≈ an evening, **M** ≈ a weekend, **L** ≈ several sessions. Kno
 
 | Item | Why | Size | Depends on |
 |---|---|---|---|
-| Archive button in the editor | Hide a shot from the published trip without deleting it; stays local | M | New `overrides.json` field; build filter; data-contract note |
 | Choose the trip cover in edit mode | Auto pick (middle placed photo) isn't always the best | S | Trip-level setting in `overrides.json`; publish already handles covers |
 | Script Access groups/apps via the Cloudflare API | Onboarding is manual clicking in Zero Trust; would let `/new-trip` do runbook step 5 too | M | API token kept outside the repo |
 | Batch "new trip" bootstrap command | Build + launcher + publish + Access in one go | M | Access scripting |

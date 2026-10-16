@@ -45,7 +45,8 @@ The build remembers its options in `_tripmap\build_args.json`, so the editor's b
 
 Double-click **`Open Wander Editor.bat`** in the trip folder. A small window opens and your browser shows the map in edit mode at `http://127.0.0.1:8765/index.html?edit`. Keep the window open while you edit. The page is reachable only from your own computer.
 
-- **Filter:** All / Needs review (estimated or unplaced) / No location.
+- **Filter:** All / Needs review (estimated or unplaced) / No location / Archived.
+- **Archive / Restore** (A / Shift+A): hide shots from the published trip. They stay here, dimmed, and their previews are removed from R2 on the next Publish.
 - **Select:** click shots in the strip, Shift-click for a range, double-click to view.
 - **Location:** click the map or a pin to place the selection; drag a pin to move one; "Remove location" takes shots off the map.
 - **Day and time:** "Move to day…" (keeps the clock time) or "Shift time" (e.g. `-1:30`, `+2`).
@@ -59,11 +60,12 @@ Double-click **`Open Wander Editor.bat`** in the trip folder. A small window ope
 ## Publishing
 
 **Publish** (or `python "$W\publish.py" "D:\<trip>"`) uploads `_tripmap` to `r2:trip-media/<slug>/`:
-1. Thumbnails, gallery images and previews, cached for a week. Only new or changed files are sent.
+1. Thumbnails, gallery images and previews that `trip.json` uses, cached for a week. Only new or changed files are sent.
 2. `trip.json`, never cached.
-3. Covers to `public/covers/`, and this trip merged into `trips.json`.
+3. Previews the trip no longer uses (archived shots) are deleted from R2. It stops before changing anything if that's over 20% of the trip (`--allow-mass-delete` to override).
+4. Covers to `public/covers/`, and this trip merged into `trips.json`.
 
-`trip.js` and `index.html` (local editor files; `trip.js` holds folder paths) are never uploaded. Data format: `docs/data-contract.md`.
+Add `--dry-run` to see the plan without changing anything. Only files `trip.json` references are uploaded, so `trip.js` and `index.html` (local editor files; `trip.js` holds folder paths) and archived shots never leave the disk. Data format: `docs/data-contract.md`.
 
 ## Size
 
