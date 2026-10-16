@@ -6,5 +6,4 @@
 - **No duplicate detection** — the same photo from two sources appears twice.
 - **Lovable preview can't load protected trips** (no Access cookie on the media host from the preview origin); test trips on wander.job-joseph.com.
 - **`travelogue-map-memory.lovable.app`** (Lovable's own published URL) isn't in the Worker's CORS list → it can't load data. Intended: wander.job-joseph.com is canonical.
-- **Old objects** `thailand-2026/trip.js` and `thailand-2026/index.html` may still exist in the bucket from an early publish. Not servable (Worker refuses them). Delete with `rclone deletefile r2:trip-media/thailand-2026/trip.js --s3-no-check-bucket` (same for index.html).
-- **tripmap has no automated tests.**
+- **tripmap has no automated tests** (see [ROADMAP.md](../ROADMAP.md)).
