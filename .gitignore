@@ -1,23 +1,25 @@
 # --- Never commit media or location data (privacy by design) ---
-*.jpg
-*.jpeg
-*.png
-*.heic
-*.heif
-*.webp
-*.mp4
-*.mov
-*.m4v
-*.lrf
-*.LRF
-*.MP4
-*.JPG
+# Bracketed patterns so upper-case names (IMG_0001.JPG, clip.MOV) are ignored on
+# case-sensitive file systems too.
+*.[jJ][pP][gG]
+*.[jJ][pP][eE][gG]
+*.[pP][nN][gG]
+*.[hH][eE][iI][cC]
+*.[hH][eE][iI][fF]
+*.[wW][eE][bB][pP]
+*.[dD][nN][gG]
+*.[aA][rR][wW]
+*.[cC][rR][23]
+*.[nN][eE][fF]
+*.[mM][pP]4
+*.[mM][oO][vV]
+*.[mM]4[vV]
+*.[lL][rR][fF]
+*.[gG][pP][xX]
+*.[kK][mM][lLzZ]
 _tripmap/
-overrides.json
-overrides.bak.json
-overrides-backup-*.json
+overrides*.json
 clip_locations.csv
-clip_locations.kml
 *_meta.csv
 exif_samples.txt
 trip.json
@@ -34,6 +36,8 @@ CLAUDE.local.md
 # --- Secrets ---
 .env
 .env.*
+*.env
+.wander/
 *.pem
 .dev.vars
 rclone.conf

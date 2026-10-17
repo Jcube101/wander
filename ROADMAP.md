@@ -42,7 +42,7 @@ Go public, tasks 1–6 (one session, in order). Task 7 is the maintainer's.
   - LICENSE (MIT) and a short, friendly CONTRIBUTING (dev setup, tests, hard rules, issues then small PRs, spare-time maintenance).
   - CLAUDE.md and RUNBOOK made generic. Instance facts move to local config/notes, out of the repo.
   - LEARNINGS keeps the real stories.
-- [ ] **5. Pre-flight checks.** Size **M**. Depends on: 4.
+- [x] **5. Pre-flight checks.** Size **M**. Depends on: 4. *Done: fresh clone + example config passes all suites, builds/edits a made-up trip, and `publish --dry-run` stops cleanly; gitleaks (full history) clean apart from the fake test token, now marked; no media, coordinates, trip JSON or tokens in history; `.gitignore` fixed for upper-case media names, `*.env`, GPX/KML/RAW; SECURITY.md added; description, topics and social preview prepared.*
   - A fresh clone with the example config: all tests pass, and `publish --dry-run` runs (against a mock, or fails cleanly without credentials).
   - A secret scan (e.g. gitleaks) over the full history. History keeps old personal values, so check that nothing *private* is in it (media, coordinates, tokens, trip JSON), not only the current tree.
   - Personal terms appear only in the allowed "story" places.

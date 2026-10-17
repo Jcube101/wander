@@ -1,0 +1,3 @@
+# Known false positives for gitleaks (https://github.com/gitleaks/gitleaks).
+# The fake test token in test_access.py, as committed before it got an inline gitleaks:allow.
+81f77588455f62f2d323e1ff31934d79d645cc7c:tripmap/tests/test_access.py:generic-api-key:19

@@ -18,7 +18,7 @@ os.environ["WANDER_CONFIG"] = str(Path(__file__).resolve().parents[2] / "wander.
 import access  # noqa: E402
 
 D = access.DASH
-TOKEN = "tok-SENTINEL-1234567890"
+TOKEN = "tok-SENTINEL-1234567890"  # fake, to check the real one is never printed  gitleaks:allow
 OTP = "idp-otp"
 ALL_ID, CREW_ID, POL_ID, APP_ID = "g-all", "g-crew", "p-lis", "a-lis"
 
