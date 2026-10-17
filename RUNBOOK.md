@@ -26,7 +26,7 @@ The Access app must exist **before** Publish; Access is the only gate. In Claude
 2. **Quick build**
    `python "C:\Users\jobjo\Github\wander\tripmap\build.py" "D:\<trip>" --name "<Title>" --tz +HH:MM --quick` (add `--camera-offset +HH:MM` for a DJI clock).
    Check: item count, how many have no location, `build_errors.txt`, DJI clips found, and whether the camera offset looks right (DJI clip times vs nearby phone photo times). Wrong offset → re-run with a corrected `--camera-offset`. The options are saved in `_tripmap\build_args.json`, so the editor's Scan reuses them.
-3. **Launcher:** copy `tripmap\Open Wander Editor.bat` into the trip folder.
+3. **Launcher:** `python tripmap/launcher.py "D:\<trip>"` puts `Open Wander Editor.bat` (Windows) or `open-wander-editor.sh` (mac/Linux) in the trip folder, pointing at this repo.
 4. **Edit + full build:** double-click the launcher → fix things → **Apply to map** → **Scan for new files** (the full build; can take hours).
 5. **Access:** `python "C:\Users\jobjo\Github\wander\tripmap\access.py" setup <slug> "<Title>" --dry-run` → check the plan → run it again without `--dry-run` (asks y/N). It creates, mirroring the Thailand trip:
    - Rule group `Wander – <Trip> crew` (empty: holds `nobody@wander.invalid` until you add people).

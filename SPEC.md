@@ -68,11 +68,11 @@ wander.job-joseph.com  — Lovable-hosted app shell (repo: travelogue-map-memory
 | `--name` | folder name | Trip title; slug derived from it |
 | `--slug` | from name | Web path segment |
 | `--out` | `<trip>/_tripmap` | Bundle folder |
-| `--tz` | `+07:00` | Zone for day boundaries and displayed times |
+| `--tz` | **required** | The trip's UTC offset: day boundaries and displayed times. `--tz -05:00` works (no `=` needed) |
 | `--assume-tz` | `--tz` | Zone for photos with no offset info |
-| `--camera-offset` | `+07:45` | DJI clock vs UTC (filename times) |
+| `--camera-offset` | `+00:00` | DJI clock vs UTC (filename times). Always saved in `build_args.json`, so a re-run never shifts clips |
 | `--clip-locations` | `<trip>/clip_locations.csv` | Optional precomputed clip times/locations |
-| `--csv-*-col`, `--csv-time-tz` | auto-detect, `+07:00` | CSV column mapping |
+| `--csv-*-col`, `--csv-time-tz` | auto-detect, `--tz` | CSV column mapping |
 | `--match-window` | `120` min | Max gap for borrowing a nearby location |
 | `--quick` | off | Thumbnails only |
 | `--data-only` | off | Rewrite data, skip media (the editor's **Apply**) |

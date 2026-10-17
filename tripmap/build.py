@@ -10,9 +10,12 @@ trip.json and the previews it uses. Originals are never modified.
 Requires: Python 3.9+, Pillow, exiftool and ffmpeg on PATH.
 
 Quick look (thumbnails only, fast):
-    python build.py "D:\\2026_ Thailand Trip" --name "Thailand 2026" --quick
+    python build.py "<trip folder>" --name "Lisbon 2025" --tz +01:00 --quick
 Full build (adds photo + 720p video previews):
-    python build.py "D:\\2026_ Thailand Trip" --name "Thailand 2026"
+    python build.py "<trip folder>" --name "Lisbon 2025" --tz +01:00
+
+--tz (the trip's UTC offset) is required. The options are saved in
+<trip>/_tripmap/build_args.json, so the editor's buttons re-run the same build.
 """
 import argparse
 import bisect
@@ -93,7 +96,7 @@ def short_id(rel):
 
 def need(tool):
     if not shutil.which(tool):
-        sys.exit(f"ERROR: '{tool}' not found on PATH. Install it first (see README).")
+        sys.exit(f"ERROR: '{tool}' not found on PATH. Install it first (see SETUP.md).")
 
 
 def read_text_any(path):
@@ -162,14 +165,14 @@ def load_csv_locations(path, args):
     latc = pick(args.csv_lat_col, "lat")
     lonc = pick(args.csv_lon_col, "lon", "lng")
     confc = pick(None, "confidence", "conf")
-    timec = pick(args.csv_time_col, "utc", "corrected", "local_time", "thai", "datetime", "time",
+    timec = pick(args.csv_time_col, "utc", "corrected", "local_time", "datetime", "time",
                  exclude=("gap", "delta", "diff", "min", "offset", "anchor"))
     log(f"  clip CSV columns -> file={fcol!r} lat={latc!r} lon={lonc!r} "
         f"time={timec!r} conf={confc!r}")
     if not (fcol and latc and lonc):
         sys.exit(f"Couldn't identify file/lat/lon columns in {path}. Columns: {cols}\n"
                  "Pass --csv-file-col / --csv-lat-col / --csv-lon-col.")
-    time_off = parse_offset(args.csv_time_tz)
+    time_off = parse_offset(args.csv_time_tz or args.tz)
     if timec and "utc" in timec.lower():
         time_off = timedelta(0)
     out = {}
@@ -330,6 +333,23 @@ def make_card(kind, src, proxy, preview, card, dur):
         return f"{src.name} card: {type(e).__name__}: {e!r}"
 
 
+OFFSET_OPTS = ("--tz", "--assume-tz", "--camera-offset", "--csv-time-tz")
+
+
+def join_negative_offsets(argv):
+    """'--tz -05:00' -> '--tz=-05:00': argparse would read -05:00 as an option."""
+    out, i = [], 0
+    while i < len(argv):
+        a = argv[i]
+        if a in OFFSET_OPTS and i + 1 < len(argv) and re.fullmatch(r"-\d{1,2}(:?\d{2})?", argv[i + 1]):
+            out.append(f"{a}={argv[i + 1]}")
+            i += 2
+            continue
+        out.append(a)
+        i += 1
+    return out
+
+
 def slugify(s):
     s = re.sub(r"[^a-z0-9]+", "-", (s or "").lower()).strip("-")
     return s or "trip"
@@ -355,15 +375,16 @@ def main():
     ap.add_argument("--name", default=None, help="Trip title shown on the map")
     ap.add_argument("--slug", default=None, help="Short web name for this trip, e.g. thailand-2026 (default: from --name)")
     ap.add_argument("--out", default=None, help=f"Output folder (default: <input>/{DEFAULT_OUT})")
-    ap.add_argument("--tz", default="+07:00", help="UTC offset used for day boundaries and display (default +07:00)")
+    ap.add_argument("--tz", required=True,
+                    help="Required. The trip's UTC offset, e.g. +07:00: day boundaries and displayed times")
     ap.add_argument("--assume-tz", default=None, help="Offset for photos with no zone info (default: --tz)")
-    ap.add_argument("--camera-offset", default="+07:45",
-                    help="DJI camera clock vs UTC, for clip times from filenames (default +07:45)")
+    ap.add_argument("--camera-offset", default="+00:00",
+                    help="DJI camera clock vs UTC, for clip times from filenames (default +00:00)")
     ap.add_argument("--clip-locations", default=None,
                     help="CSV with precomputed clip locations (default: <input>/clip_locations.csv if present)")
     ap.add_argument("--csv-file-col"); ap.add_argument("--csv-lat-col")
     ap.add_argument("--csv-lon-col"); ap.add_argument("--csv-time-col")
-    ap.add_argument("--csv-time-tz", default="+07:00", help="Zone of the CSV time column if not UTC")
+    ap.add_argument("--csv-time-tz", default=None, help="Zone of the CSV time column if not UTC (default: --tz)")
     ap.add_argument("--match-window", type=int, default=120,
                     help="Minutes: place un-geotagged items at the nearest geotagged item within this window (0=off)")
     ap.add_argument("--quick", action="store_true", help="Thumbnails only; skip photo/video previews")
@@ -380,7 +401,14 @@ def main():
                     help="Email or link for 'Request original' in the local viewer, e.g. you@example.com "
                          "(default: defaults.contact in the Wander config, else none)")
     ap.add_argument("--limit", type=int, default=0, help="Process only the first N items (testing)")
-    args = ap.parse_args()
+    args = ap.parse_args(join_negative_offsets(sys.argv[1:]))
+    try:
+        view_off = parse_offset(args.tz)
+        def_off = parse_offset(args.assume_tz or args.tz)
+        cam_off = parse_offset(args.camera_offset)
+        parse_offset(args.csv_time_tz or args.tz)
+    except ValueError as e:
+        sys.exit(f"ERROR: {e}")
 
     if args.contact is None:
         args.contact = default_contact()
@@ -400,7 +428,7 @@ def main():
 
     # Remember how this trip is built so the map's buttons can re-run it
     keep, skip = [], {"--quick", "--data-only"}
-    raw = sys.argv[1:]
+    raw = join_negative_offsets(sys.argv[1:])
     i = 0
     while i < len(raw):
         a = raw[i]
@@ -413,11 +441,11 @@ def main():
         keep.append(a)
         i += 1
     keep = [str(root) if a == args.input else a for a in keep]
+    # Save the camera offset even when it's the default, so a trip never shifts
+    # if the default changes (--tz is required, so it's always there).
+    if not any(a == "--camera-offset" or a.startswith("--camera-offset=") for a in keep):
+        keep += ["--camera-offset", args.camera_offset]
     (out / "build_args.json").write_text(json.dumps(keep), encoding="utf-8")
-
-    view_off = parse_offset(args.tz)
-    def_off = parse_offset(args.assume_tz or args.tz)
-    cam_off = parse_offset(args.camera_offset)
 
     csv_path = Path(args.clip_locations) if args.clip_locations else root / "clip_locations.csv"
     csv_locs = {}

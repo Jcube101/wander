@@ -1,50 +1,54 @@
 # TripMap
 
-Point it at a trip folder → get an interactive map of every photo and video, with day-by-day filtering, a timeline strip, a "play the trip" mode, in-place viewing, a local editor for fixing locations/days/times, and one-click publishing to the Wander site. Originals are only read, never changed.
+Point it at a trip folder → get an interactive map of every photo and video, with day-by-day filtering, a timeline strip, a "play the trip" mode, in-place viewing, a local editor for fixing locations/days/times, and one-click publishing to your Wander site. Originals are only read, never changed.
 
-**The code runs from this repo.** A trip folder holds only its media, `overrides.json`, the built `_tripmap\`, and a one-file launcher. Change the code here and every trip picks it up.
+**The code runs from this repo.** A trip folder holds only its media, `overrides.json`, the built `_tripmap/`, and a one-file launcher. Change the code here and every trip picks it up.
 
-## One-time setup (Windows)
+Windows-tested; mac/Linux should work (the same Python, plus the `.sh` launcher). Commands below are run from the repo root; on mac/Linux use `python3` and `/` paths.
 
-```powershell
-pip install pillow
-winget install Gyan.FFmpeg OliverBetz.ExifTool Rclone.Rclone   # then open a NEW terminal
-rclone config create r2 s3 provider=Cloudflare access_key_id="KEY" secret_access_key="SECRET" endpoint="ENDPOINT" acl=private
-```
+## One-time setup
 
-In PowerShell, set this once per window: `$W = "C:\Users\jobjo\Github\wander\tripmap"`
+Python 3.9+ with Pillow, plus exiftool, ffmpeg and (for publishing) rclone on your PATH:
+
+| | Install |
+|---|---|
+| Windows | `pip install pillow` · `winget install Gyan.FFmpeg OliverBetz.ExifTool Rclone.Rclone` (then open a new terminal) |
+| macOS | `pip3 install pillow` · `brew install ffmpeg exiftool rclone` |
+| Debian/Ubuntu | `pip3 install pillow` · `sudo apt install ffmpeg libimage-exiftool-perl rclone` |
+
+Publishing and Access also need the Wander config and an rclone remote for your bucket; see [SETUP.md](../SETUP.md). Building and editing don't.
 
 ## A new trip
 
-1. **First build** (a quick look with thumbnails only, then the full build):
-   ```powershell
-   python "$W\build.py" "D:\<trip>" --name "<Trip title>" --tz +07:00 --quick
-   python "$W\build.py" "D:\<trip>" --name "<Trip title>" --tz +07:00
+1. **First build** (a quick look with thumbnails only, then the full build). `--tz` is the trip's UTC offset and is required:
+   ```
+   python tripmap/build.py "<trip folder>" --name "<Trip title>" --tz +01:00 --quick
+   python tripmap/build.py "<trip folder>" --name "<Trip title>" --tz +01:00
    ```
    Check the line starting `clip CSV columns ->` if you use a `clip_locations.csv`. The full build makes 1600px photos and 720p video previews (from DJI `.LRF` proxies when present). Re-running skips anything already built, so you can stop and resume.
-2. **Add the launcher:** copy `Open Wander Editor.bat` from this folder into the trip folder (next to the photos, not inside `_tripmap`). If the repo isn't at `C:\Users\jobjo\Github\wander`, edit the `WANDER=` line in it.
-3. **Access before Publish:** `python "$W\access.py" setup <slug> "<Trip title>" --dry-run`, check the plan, then run it again without `--dry-run`. Add people with `python "$W\access.py" add <slug> <email>` (see `RUNBOOK.md`).
-4. Double-click the launcher, fix things, **Apply to map**, **Publish** (it refuses until step 3 is done).
+2. **Add the launcher:** `python tripmap/launcher.py "<trip folder>"` writes `Open Wander Editor.bat` (Windows) or `open-wander-editor.sh` (mac/Linux; `--sh`/`--bat` to choose) into the trip folder, pointing at this repo. If you move the repo, run it again with `--force`.
+3. **Access before Publish:** `python tripmap/access.py setup <slug> "<Trip title>" --dry-run`, check the plan, then run it again without `--dry-run`. Add people with `python tripmap/access.py add <slug> <email>` (see [RUNBOOK.md](../RUNBOOK.md)).
+4. Start the launcher, fix things, **Apply to map**, **Publish** (it refuses until step 3 is done).
 
 ## Options
 
 | Option | Default | Meaning |
 |---|---|---|
-| `--name` | folder name | Trip title; also gives the web slug (`Thailand 2026` → `thailand-2026`) |
+| `--name` | folder name | Trip title; also gives the web slug (`Lisbon 2025` → `lisbon-2025`) |
 | `--slug` | from `--name` | Override the web name |
-| `--tz` | `+07:00` | Zone for day boundaries and displayed times |
-| `--camera-offset` | `+07:45` | DJI clock vs UTC, for clips whose time comes from the filename |
-| `--clip-locations` | `<trip>\clip_locations.csv` | Precomputed clip locations (optional) |
+| `--tz` | **required** | The trip's UTC offset: day boundaries and displayed times. Negative offsets work as `--tz -05:00` |
+| `--camera-offset` | `+00:00` | DJI clock vs UTC, for clips whose time comes from the filename |
+| `--clip-locations` | `<trip>/clip_locations.csv` | Precomputed clip locations (optional) |
 | `--match-window` | `120` | Minutes; shots without GPS borrow the nearest geotagged shot within this |
 | `--quick` | off | Thumbnails only |
 | `--data-only` | off | Rewrite map data only (what **Apply to map** runs) |
-| `--contact` | none | Adds "Request original" in the local viewer |
+| `--contact` | `defaults.contact` in the config, else none | Adds "Request original" in the local viewer |
 
-The build remembers its options in `_tripmap\build_args.json`, so the editor's buttons re-run it the same way.
+The build remembers its options (always including `--tz` and `--camera-offset`) in `_tripmap/build_args.json`, so the editor's buttons re-run it the same way.
 
 ## Editing (no terminal needed)
 
-Double-click **`Open Wander Editor.bat`** in the trip folder. A small window opens and your browser shows the map in edit mode at `http://127.0.0.1:8765/index.html?edit`. Keep the window open while you edit. The page is reachable only from your own computer.
+Double-click **`Open Wander Editor.bat`** in the trip folder (mac/Linux: run `open-wander-editor.sh`). A small window opens and your browser shows the map in edit mode at `http://127.0.0.1:8765/index.html?edit`. Keep the window open while you edit. The page is reachable only from your own computer.
 
 The toolbar under the map has the filters on the left; on the right, the save status, **Apply to map**, **Publish**, a **⋯** menu (Scan for new files, Import, Backup, Automatic cover, Select all in view, Follow selection) and **?** (hints and shortcuts). Selecting shots brings up a selection bar over the bottom of the map with only the actions that apply to them.
 
@@ -64,7 +68,7 @@ The toolbar under the map has the filters on the left; on the right, the save st
 
 ## Publishing
 
-**Publish** (or `python "$W\publish.py" "D:\<trip>"`) uploads `_tripmap` to `r2:trip-media/<slug>/`:
+**Publish** (or `python tripmap/publish.py "<trip folder>"`) uploads `_tripmap` to `<remote>:<bucket>/<slug>/` from your config:
 1. Thumbnails, gallery images and previews that `trip.json` uses, cached for a week. Only new or changed files are sent.
 2. `trip.json`, never cached.
 3. Previews the trip no longer uses (archived shots) are deleted from R2. It stops before changing anything if that's over 20% of the trip (`--allow-mass-delete` to override).
@@ -74,4 +78,4 @@ Add `--dry-run` to see the plan without changing anything. Only files `trip.json
 
 ## Size
 
-The build prints the bundle size (about 2.5 GB for ~1,000 shots). R2's free tier is 10 GB. To shrink it, delete `_tripmap\media\*.mp4` and rebuild with `--crf 30` or `--video-height 540`.
+The build prints the bundle size (about 2.5 GB for ~1,000 shots). R2's free tier is 10 GB. To shrink it, delete `_tripmap/media/*.mp4` and rebuild with `--crf 30` or `--video-height 540`.

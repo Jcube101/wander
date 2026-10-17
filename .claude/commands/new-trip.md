@@ -1,6 +1,6 @@
 ---
 description: Start a new Wander trip (preflight, quick build, launcher, Access after Job's yes), then hand Job the publish checklist
-argument-hint: "<trip folder>" "<Title>" <+HH:MM tz> [camera offset +HH:MM]
+argument-hint: "<trip folder>" "<Title>" <+HH:MM tz, required> [camera offset +HH:MM, default +00:00]
 ---
 
 # New trip
@@ -24,7 +24,7 @@ The procedure is **RUNBOOK.md → "New trip"**. Read it now and follow it; it is
    - lines in `_tripmap\build_errors.txt` (if any) and "skipped (no usable time)" from the build output
    - DJI clips found (`tsrc == "dji-filename"`)
    - **Camera offset check:** for each DJI clip, find the nearest phone photo with a firm time (`tsrc` in `exif+offset`, `gps-time`) and note the signed gap. Report the median gap and the per-day medians. A median beyond ~30 min, or a consistent same-sign gap, means the offset is probably off. Suggest a corrected `--camera-offset` (current offset + median gap, rounded to 15 min) and offer to re-run step 2 with it. If there are no DJI clips or no firm-time phone photos, say the check can't be done.
-3. **Launcher.** Copy `tripmap\Open Wander Editor.bat` into the trip folder (next to the media, not inside `_tripmap`).
+3. **Launcher.** `python tripmap/launcher.py "<folder>"` (it writes the launcher into the trip folder, next to the media, pointing at this repo).
 
 ## Step 5: Access (after Job's yes)
 5. Run `python tripmap/access.py setup <slug> "<Title>" --dry-run` (add `--trip "<Trip>"` if `<Trip>` isn't the title minus its year). Show Job the plan verbatim and ask whether to apply it.

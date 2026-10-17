@@ -42,7 +42,9 @@ def photo(name, local=None, off="+07:00", gps=None, **extra):
 ANCHOR = (10.0, 20.0)
 
 
-class Rules(unittest.TestCase):
+class BuildCase(unittest.TestCase):
+    """Runs build.py on fake exiftool rows; helpers only."""
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -68,6 +70,8 @@ class Rules(unittest.TestCase):
     def assertTime(self, item, t, tsrc):
         self.assertEqual((item["t"], item["tsrc"]), (t, tsrc))
 
+
+class Rules(BuildCase):
     # ------------------------------------------------------------ time
 
     def test_dji_clip_time_from_filename_at_camera_offset(self):
@@ -244,6 +248,53 @@ class Rules(unittest.TestCase):
         items = self.run_build(rows, tz="+00:00")  # same instants, UTC days
         self.assertEqual(items["other-zone.jpg"]["day"], "2027-03-01")
         self.assertEqual(items["early.jpg"]["day"], "2027-03-01")
+
+
+class Defaults(BuildCase):
+    """No built-in timezone or camera offset: --tz is required, the camera offset
+    defaults to 0, and both end up in build_args.json so re-runs never shift."""
+
+    def test_tz_is_required(self):
+        with mock.patch.object(sys, "argv", ["build.py", str(self.root), "--name", "X"]),              mock.patch("sys.stderr"), self.assertRaises(SystemExit) as e:
+            build.main()
+        self.assertEqual(e.exception.code, 2)  # argparse: missing required option
+
+    def test_bad_offset_stops_before_anything_is_written(self):
+        with mock.patch.object(sys, "argv", ["build.py", str(self.root), "--tz", "+7h"]),              self.assertRaises(SystemExit) as e:
+            build.main()
+        self.assertIn("Bad UTC offset", str(e.exception.code))
+        self.assertFalse((self.root / "_tripmap").exists())
+
+    def test_camera_offset_defaults_to_utc(self):
+        items = self.run_build([
+            {"FileName": "DJI_20270301120000_0001_D.MP4", "Make": "DJI"},
+        ])
+        self.assertTime(items["DJI_20270301120000_0001_D.MP4"], ep("2027-03-01 12:00:00", "+00:00"), "dji-filename")
+
+    def test_negative_offsets_work_without_an_equals_sign(self):
+        items = self.run_build([
+            photo("a.jpg", "2027-03-01 10:00:00", off=None),
+            {"FileName": "DJI_20270301120000_0001_D.MP4", "Make": "DJI"},
+        ], "--camera-offset", "-04:00", tz="-05:00")
+        self.assertTime(items["a.jpg"], ep("2027-03-01 10:00:00", "-05:00"), "exif-assumed-tz")
+        self.assertTime(items["DJI_20270301120000_0001_D.MP4"], ep("2027-03-01 12:00:00", "-04:00"), "dji-filename")
+        self.assertEqual(self.trip["tzOffsetMin"], -300)
+
+    def test_build_args_record_tz_and_camera_offset(self):
+        self.run_build([photo("a.jpg", "2027-03-01 10:00:00")], tz="+05:30")
+        saved = json.loads((self.root / "_tripmap" / "build_args.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved[saved.index("--tz") + 1], "+05:30")
+        self.assertEqual(saved[saved.index("--camera-offset") + 1], "+00:00")
+        self.assertNotIn("--data-only", saved)
+        self.run_build([photo("a.jpg", "2027-03-01 10:00:00")], "--camera-offset", "+07:45", tz="-03:00")
+        saved = json.loads((self.root / "_tripmap" / "build_args.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved.count("--camera-offset"), 1)
+        self.assertIn("--tz=-03:00", saved)
+
+    def test_csv_time_without_zone_defaults_to_tz(self):
+        items = self.run_build([photo("clip.jpg", "2027-03-01 10:00:00")],
+                               csv="filename,lat,lon,local_time\nclip.jpg,1.0,2.0,2027-03-01 09:00:00\n", tz="+03:00")
+        self.assertTime(items["clip.jpg"], ep("2027-03-01 09:00:00", "+03:00"), "csv")
 
 
 if __name__ == "__main__":

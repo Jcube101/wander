@@ -181,7 +181,8 @@ def main():
     except config.ConfigError as e:
         sys.exit(f"ERROR: {e}")
     if not shutil.which("rclone"):
-        sys.exit("rclone isn't installed or not on PATH. Install it with: winget install Rclone.Rclone")
+        sys.exit("rclone isn't installed or not on PATH. Install it: https://rclone.org/install/ "
+                 "(Windows: winget install Rclone.Rclone, macOS: brew install rclone)")
     root = Path(args.trip).resolve() if args.trip else HERE.parent
     out = root / "_tripmap"
     tj = out / "trip.json"
