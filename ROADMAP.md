@@ -29,7 +29,7 @@ Go public, tasks 1–6 (one session, in order). Task 7 is Job's.
 
 **Constraint for every task:** Job's live setup must still work when the task is done: wander.job-joseph.com, the media Worker, Access, and publishing the Thailand trip. CI must stay green. Each task ends with a commit to main and a green CI run, and is ticked here with a one-line note. After a restart, resume from the first unticked task.
 
-- [ ] **1. Audit (read-only).** Size **S**. Depends on: —.
+- [x] **1. Audit (read-only).** Size **S**. Depends on: —. *Done: ~25 values classified; the list is in Job's `%USERPROFILE%\.wander\go-public-audit.md` (it names the real values, so it stays out of the repo).*
   List every personal or instance-specific value with file:line: domains, paths, bucket, rclone remote, Zero Trust team, Lovable project ID/IP, Thailand slug/dates/timezones, names, "parents". Classify each one as *config* (make it configurable), *example* (replace with example.com), *story* (keep, but only in README/LEARNINGS) or *remove*. Write the list where later tasks can use it. Make no other changes.
 - [ ] **2. Config extraction.** Size **L**. Depends on: 1.
   One `wander.config.json`. Commit `wander.config.example.json`; Job's real file is `%USERPROFILE%\.wander\config.json`. It covers the site origins, media domain, bucket, rclone remote, Access naming prefix and defaults. build/publish/access/serve read it. The Worker reads its values from wrangler vars, with a committed `wrangler.example.toml` and Job's real `wrangler.toml` gitignored (`git rm --cached`, so his copy stays and still deploys). Move Job's values into his local config so nothing breaks. Tests use example.com.
