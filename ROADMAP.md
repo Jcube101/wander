@@ -21,37 +21,37 @@ Size: **S** ≈ an evening, **M** ≈ a weekend, **L** ≈ several sessions. Ope
 
 ## Now
 
-Nothing in progress; next up is Go public, task 1.
+Go public, tasks 1–6 (one session, in order). Task 7 is Job's.
 
 ## Initiative: Go public
 
 **Goal:** make the repo public and usable by anyone, as portfolio material. There is one repo, and Job keeps using it through a local, gitignored config. His story stays in (not anonymous). MIT license.
 
-**Constraint for every task:** Job's live setup must still work when the task is done: wander.job-joseph.com, the media Worker, Access, and publishing the Thailand trip. CI must stay green. Each task is one Claude Code session and ends with a commit to main and a green CI run.
+**Constraint for every task:** Job's live setup must still work when the task is done: wander.job-joseph.com, the media Worker, Access, and publishing the Thailand trip. CI must stay green. Each task ends with a commit to main and a green CI run, and is ticked here with a one-line note. After a restart, resume from the first unticked task.
 
-1. **Audit (read-only).** Size **S**. Depends on: —.
-   List every personal or instance-specific value with file:line: domains, paths, bucket, rclone remote, Zero Trust team, Lovable project ID/IP, Thailand slug/dates/timezones, names, "parents". Classify each one as *config* (make it configurable), *example* (replace with example.com), *story* (keep, but only in README/LEARNINGS) or *remove*. Write the list where later tasks can use it. Make no other changes.
-2. **Config extraction.** Size **L**. Depends on: 1.
-   One `wander.config.json`. Commit `wander.config.example.json`; Job's real file is `%USERPROFILE%\.wander\config.json`. It covers the site origins, media domain, bucket, rclone remote, Access naming prefix and defaults. build/publish/access/serve read it. The Worker reads its values from wrangler vars, with a committed `wrangler.example.toml` and Job's real `wrangler.toml` gitignored (it is committed today), or another approach if the plan justifies it. Move Job's values into his local config so nothing breaks. Tests use example.com.
-3. **Neutral defaults and portability.** Size **M**. Depends on: 2.
-   No built-in timezone or camera offset: a new trip must set its timezone, and the camera offset defaults to 0. The launcher finds the repo relative to itself, with no `C:\Users\jobjo`. Add a `.sh` launcher. The docs say "Windows-tested; mac/Linux should work".
-4. **Docs for strangers.** Size **L**. Depends on: 2, 3.
-   - README: what Wander is, why Job built it (his story), the live landing page as the example, an architecture diagram and a quick start.
-   - Step-by-step first-time setup: Cloudflare account and domain, R2 bucket, scoped rclone key, Worker deploy, Access and the API token, then the first trip.
-   - The data contract presented as "build your own site".
-   - LICENSE (MIT, Job Joseph) and a short CONTRIBUTING.
-   - CLAUDE.md and RUNBOOK made generic. Job's instance facts move to his local config/notes, out of the repo.
-   - LEARNINGS keeps the real stories.
-5. **Pre-flight checks.** Size **M**. Depends on: 4.
-   - A fresh clone with the example config: all tests pass, and `publish --dry-run` runs (against a mock, or fails cleanly without credentials).
-   - A secret scan (e.g. gitleaks) over the full history. History keeps old personal values, so check that nothing *private* is in it (media, coordinates, tokens, trip JSON), not only the current tree.
-   - Personal terms appear only in the allowed "story" places.
-   - Review `.gitignore`.
-   - Prepare the GitHub description, topics and a social-preview image.
-6. **Reference viewer.** Size **L**. Depends on: 2 (config), done after 5.
-   A simple static viewer that reads `trips.json`/`trip.json` through the Worker and can be deployed on Cloudflare Pages, so people don't need Lovable. Reuse the local viewer's map code where it makes sense.
-7. **Go public (Job does this himself).** Size **S**. Depends on: 5, 6.
-   Flip the visibility and confirm CI is green on the public repo. Check Job's instance: a dry-run publish, `access.py list`, and the site in an incognito window.
+- [ ] **1. Audit (read-only).** Size **S**. Depends on: —.
+  List every personal or instance-specific value with file:line: domains, paths, bucket, rclone remote, Zero Trust team, Lovable project ID/IP, Thailand slug/dates/timezones, names, "parents". Classify each one as *config* (make it configurable), *example* (replace with example.com), *story* (keep, but only in README/LEARNINGS) or *remove*. Write the list where later tasks can use it. Make no other changes.
+- [ ] **2. Config extraction.** Size **L**. Depends on: 1.
+  One `wander.config.json`. Commit `wander.config.example.json`; Job's real file is `%USERPROFILE%\.wander\config.json`. It covers the site origins, media domain, bucket, rclone remote, Access naming prefix and defaults. build/publish/access/serve read it. The Worker reads its values from wrangler vars, with a committed `wrangler.example.toml` and Job's real `wrangler.toml` gitignored (`git rm --cached`, so his copy stays and still deploys). Move Job's values into his local config so nothing breaks. Tests use example.com.
+- [ ] **3. Neutral defaults and portability.** Size **M**. Depends on: 2.
+  No built-in timezone or camera offset: a new trip must set its timezone, and the camera offset defaults to 0. The launcher finds the repo relative to itself, with no `C:\Users\jobjo`. Add a `.sh` launcher. The docs say "Windows-tested; mac/Linux should work".
+- [ ] **4. Docs for strangers (incl. CONTRIBUTING.md and LICENSE).** Size **L**. Depends on: 2, 3.
+  - README: what Wander is, why Job built it (his story), the live landing page as the example (trips stay locked), an architecture diagram and a quick start.
+  - SETUP: step-by-step first-time setup: Cloudflare account and domain, R2 bucket, scoped rclone key, Worker deploy, Access and the API token, then the first trip.
+  - The data contract presented as "build your own site".
+  - LICENSE (MIT, Job Joseph) and a short, friendly CONTRIBUTING (dev setup, tests, hard rules, issues then small PRs, spare-time maintenance).
+  - CLAUDE.md and RUNBOOK made generic. Job's instance facts move to his local config/notes, out of the repo.
+  - LEARNINGS keeps the real stories.
+- [ ] **5. Pre-flight checks.** Size **M**. Depends on: 4.
+  - A fresh clone with the example config: all tests pass, and `publish --dry-run` runs (against a mock, or fails cleanly without credentials).
+  - A secret scan (e.g. gitleaks) over the full history. History keeps old personal values, so check that nothing *private* is in it (media, coordinates, tokens, trip JSON), not only the current tree.
+  - Personal terms appear only in the allowed "story" places.
+  - Review `.gitignore`.
+  - Prepare the GitHub description, topics and a social-preview image.
+- [ ] **6. Reference viewer.** Size **L**. Depends on: 2 (config), 5.
+  A simple static viewer that reads `trips.json`/`trip.json` through the Worker and can be deployed on Cloudflare Pages, so people don't need Lovable. Reuse the local viewer's map code where it makes sense. Ends by re-running task 5's checks, so the viewer is covered too.
+- [ ] **7. Go public (Job does this himself).** Size **S**. Depends on: 6.
+  Flip the visibility and confirm CI is green on the public repo. Check Job's instance: a dry-run publish, `access.py list`, and the site in an incognito window.
 
 ## Next
 
