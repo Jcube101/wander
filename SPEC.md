@@ -1,10 +1,10 @@
 # Wander — Spec
 
-What Wander is and what it must do: how the pieces fit (Components), what each must do, and the exact JSON shapes ([Data contract](#data-contract-tripjson--tripsjson)). Why things are this way: [LEARNINGS.md → Decisions](LEARNINGS.md#decisions).
+What Wander is and what it must do: how the pieces fit (Components), what each must do, and the exact JSON shapes ([Data contract — build your own site](#data-contract--build-your-own-site)). Why things are this way: [LEARNINGS.md → Decisions](LEARNINGS.md#decisions). Examples use `wander.example.com` (site), `media.example.com` (media host) and a made-up trip, `lisbon-2025`; your own values live in your config ([SETUP.md](SETUP.md)).
 
 ## Purpose
 
-A private archive of trips. Each trip is a map, a timeline and a gallery of every photo and video. Originals stay on Job's external disk. Only small previews go online, and each trip is visible only to the people who were on it.
+A private archive of trips. Each trip is a map, a timeline and a gallery of every photo and video. Originals stay on the owner's disk. Only small previews go online, and each trip is visible only to the people who were on it.
 
 ## Audiences
 
@@ -12,8 +12,8 @@ A private archive of trips. Each trip is a map, a timeline and a gallery of ever
 |---|---|---|
 | Anyone | Landing page: trip titles, dates, counts, covers | Public `trips.json` + `public/covers/` |
 | A trip's crew | That trip only | Email in the trip's crew rule group |
-| "All trips" group (Job and parents) | Every trip | Email in `Wander – All trips` |
-| Job | Everything, plus the local editor | Runs `tripmap/` on his own machine |
+| "All trips" group (e.g. the owner and family) | Every trip | Email in `<prefix> – All trips` |
+| The owner | Everything, plus the local editor | Runs `tripmap/` on their own machine |
 
 ## Components
 
@@ -21,41 +21,43 @@ A private archive of trips. Each trip is a map, a timeline and a gallery of ever
 
 ```
 Hard disk (originals — never uploaded)
-  D:\<trip>\                 photos, DJI clips (+ .LRF proxies), clip_locations.csv, overrides.json
-  D:\<trip>\Open Wander Editor.bat   one-file launcher → runs C:\Users\jobjo\Github\wander\tripmap\serve.py on this folder
-  D:\<trip>\_tripmap\        built bundle: thumbs/ cards/ media/ trip.json  (+ local-only trip.js, index.html)
+  <trip>/                    photos, DJI clips (+ .LRF proxies), clip_locations.csv, overrides.json
+  <trip>/Open Wander Editor.bat (or open-wander-editor.sh)   launcher → runs this repo's tripmap/serve.py on this folder
+  <trip>/_tripmap/           built bundle: thumbs/ cards/ media/ trip.json  (+ local-only trip.js, index.html, build_args.json)
         │
         │  publish.py (rclone; key scoped to the bucket)
         ▼
-R2 bucket "trip-media"  — private, no public domain
+R2 bucket (e.g. "trip-media")  — private, no public domain
   trips.json                       list of trips (public)
   public/covers/<slug>(-card).jpg  landing-page covers (public)
   <slug>/trip.json|thumbs|cards|media   trip content (protected)
         │
         │  R2 binding
         ▼
-Worker "wander-media" on media.job-joseph.com
-  /trips.json, /public/*     public, CORS (credentials) for wander + Lovable preview
+Worker (e.g. "wander-media") on media.example.com
+  /trips.json, /public/*     public; CORS with credentials for SITE_ORIGINS, "*" without for anyone else
   /<slug>/...                behind Cloudflare Access app for that trip
-  /auth/<slug>?return=URL    behind the same Access app; 302s back to *.job-joseph.com only
+  /auth/<slug>?return=URL    behind the same Access app; 302s back to a SITE_ORIGINS origin only
   /me                        email from the Access cookie (display only)
         ▲
         │  fetch(credentials:'include'); <img>/<video> send the cookie automatically (same site)
         │
-wander.job-joseph.com  — Lovable-hosted app shell (repo: travelogue-map-memory), public
+wander.example.com  — any static site (the live example is built with Lovable), public
   /            landing: trips from trips.json, lock badge via HEAD trip.json
   /<slug>      trip page; "This trip is private" → Sign in → /auth/<slug> → back with ?signedin=1
 ```
 
 | Component | Where it runs | Contract |
 |---|---|---|
-| **tripmap build** (`build.py`) | Job's PC, from this repo | Trip folder → `_tripmap/` bundle + `trip.json` |
+| **config** (`config.py`) | The owner's machine | `~/.wander/config.json` (or `$WANDER_CONFIG`, or `wander.config.json` in the repo): media host, rclone remote + bucket, site URL, Access prefix and sessions. Only publish and Access need it |
+| **tripmap build** (`build.py`) | The owner's machine, from this repo | Trip folder → `_tripmap/` bundle + `trip.json` |
 | **tripmap editor** (`serve.py` + `viewer.html`) | `127.0.0.1:8765`, started by the trip folder's launcher | Reads/writes `overrides.json`; runs build/publish |
-| **tripmap publish** (`publish.py`) | Job's PC | `_tripmap/` → R2 via rclone |
-| **R2 bucket** `trip-media` | Cloudflare, private, no public domain | Layout in the diagram above |
-| **Worker** `wander-media` | `media.job-joseph.com` | Serves an allow-list of R2 keys |
+| **launcher** (`launcher.py`) | The owner's machine | Writes the trip folder's `.bat`/`.sh` launcher with this repo's path |
+| **tripmap publish** (`publish.py`) | The owner's machine | `_tripmap/` → R2 via rclone |
+| **R2 bucket** | Cloudflare, private, no public domain | Layout in the diagram above |
+| **Worker** (`worker/`) | The media host | Serves an allow-list of R2 keys; settings in `wrangler.toml` (`SITE_ORIGINS`) |
 | **Cloudflare Access** | Zero Trust, in front of the Worker | Decides who sees which trip |
-| **Lovable site** | `wander.job-joseph.com` (repo `Jcube101/travelogue-map-memory`) | Consumes the [data contract](#data-contract-tripjson--tripsjson) |
+| **Site** | The site host, same registrable domain as the media host | Consumes the [data contract](#data-contract--build-your-own-site) |
 
 ## Functional requirements
 
@@ -137,7 +139,7 @@ Hide a shot from the published trip without deleting anything.
 | Local files | Originals and `_tripmap/` previews are never deleted; Scan keeps building them |
 | R2 | Publish removes the archived shot's previews; Restore + Publish uploads them again |
 
-No `trip.json` schema change: the [data contract](#data-contract-tripjson--tripsjson) already allows day gaps.
+No `trip.json` schema change: the [data contract](#data-contract--build-your-own-site) already allows day gaps.
 
 ### Cover
 
@@ -215,12 +217,12 @@ Never uploaded: anything `trip.json` doesn't reference, including `trip.js`, `in
 | Range | 206 with `content-range`, incl. suffix ranges |
 | Conditional | `If-None-Match` etc. → 304 |
 | Caching | Public: data `no-cache`, images 1 h. Protected: `private`, data `no-cache`, media 1 week |
-| CORS | Credentials only for known site origins; public paths also answer `*` without credentials |
+| CORS | Credentials only for the origins in `SITE_ORIGINS` (wrangler var, comma-separated); public paths also answer `*` without credentials. Without `SITE_ORIGINS`: no credentialed CORS and `/auth` answers 500 |
 | Headers | `etag`, `accept-ranges`, `x-content-type-options: nosniff` |
 
 ### Access
 
-Rule groups per audience (`Wander – All trips`, `Wander – <Trip> crew`). One self-hosted app per trip with destinations `media.job-joseph.com/<slug>` and `media.job-joseph.com/auth/<slug>`. Allow policy = trip crew OR All trips. One-time PIN login. Managed with `tripmap/access.py` (below); the dashboard is the fallback.
+Rule groups per audience (`<prefix> – All trips`, `<prefix> – <Trip> crew`; `<prefix>` is `access.prefix` in the config, default `Wander`). One self-hosted app per trip with destinations `<media host>/<slug>` and `<media host>/auth/<slug>`. Allow policy = trip crew OR All trips. One-time PIN login. Managed with `tripmap/access.py` (below); the dashboard is the fallback.
 
 ### Access scripting (`tripmap/access.py`)
 
@@ -228,14 +230,14 @@ Manages the above through the Cloudflare API, so onboarding needs no dashboard c
 
 | Command | Effect |
 |---|---|
-| `setup <slug> "<Title>"` | Crew group `Wander – <Trip> crew`, reusable policy `Wander – <Trip> viewers`, app `Wander – <Title>`. `<Trip>` = title minus a trailing year (`--trip` overrides). Names use an en dash (U+2013) |
-| `add <slug\|all> <email>` | Add to the trip's crew, or to `Wander – All trips` |
+| `setup <slug> "<Title>"` | Crew group `<prefix> – <Trip> crew`, reusable policy `<prefix> – <Trip> viewers`, app `<prefix> – <Title>`. `<Trip>` = title minus a trailing year (`--trip` overrides). Names use an en dash (U+2013) |
+| `add <slug\|all> <email>` | Add to the trip's crew, or to `<prefix> – All trips` |
 | `remove <slug\|all> <email>` | Remove; `--revoke` also ends that person's Access sessions (`revoke_user`) |
 | `list <slug\|all>` | Members; for a slug also the app's destinations, policy and session lengths |
 
 | Rule | Behaviour |
 |---|---|
-| Mirrors Thailand | App: destinations above, `domain` = the first, One-time PIN as the only IdP, no auto-redirect, App Launcher hidden, session 24 h, Thailand's cookie settings. Policy: allow, include crew OR All trips, no exclude/require, session 730 h. Constants at the top of `access.py`; `setup thailand-2026 "Thailand 2026" --dry-run` must print "Nothing to change" |
+| Same for every trip | App: destinations above, `domain` = the first, One-time PIN as the only IdP, no auto-redirect, App Launcher hidden, the cookie settings in `APP_SETTINGS` at the top of `access.py`, session `access.appSession` (default 24 h). Policy: allow, include crew OR All trips, no exclude/require, session `access.policySession` (default 730 h). Running `setup … --dry-run` on an existing trip must print "Nothing to change" |
 | Idempotent | Group/policy found by exact name; app by destination first, then name. Matches → "Nothing to change". Differences print as `field: live -> expected` and are written only after y/N (or `--yes`). Updates GET the live object, change only managed fields and PUT the whole object back |
 | Never deletes | No app, policy or group is ever deleted; that stays a dashboard action. Two apps on one slug → error |
 | Empty group | Holds the rule `nobody@wander.invalid` (can't exist); removing the last member puts it back. Hidden in `list` |
@@ -243,29 +245,36 @@ Manages the above through the Cloudflare API, so onboarding needs no dashboard c
 | Idempotent members | Adding an existing member or removing a missing one writes nothing and says so. Emails compared lowercase |
 | Confirmation | `setup` and `remove` ask y/N unless `--yes`; with no terminal the answer is no. Every write command has `--dry-run` (GETs only) |
 | After setup | Runs the publish guard's check on `<slug>/trip.json` and prints it (302/401/403 = protected) |
-| Credentials | `CF_API_TOKEN`, `CF_ACCOUNT_ID` from the environment, else `%USERPROFILE%\.wander\cloudflare.env` (outside the repo). Missing → prints how to create the token: two Account permissions, `Access: Apps and Policies` and `Access: Organizations, Identity Providers, and Groups` (Edit), nothing broader; exit 2 |
+| Config | No config → exit 2 with how to make one. Media host, prefix and sessions come from it |
+| Credentials | `CF_API_TOKEN`, `CF_ACCOUNT_ID` from the environment, else `~/.wander/cloudflare.env` (outside the repo). Missing → prints how to create the token: two Account permissions, `Access: Apps and Policies` and `Access: Organizations, Identity Providers, and Groups` (Edit), nothing broader; exit 2 |
 | Token handling | Sent only in the `Authorization` header; never printed, logged or committed (API error text is scrubbed too). Claude Code never reads the file |
 | Emails | May appear in terminal output; never in the repo, docs, test fixtures (use `@example.com`) or commit messages |
 
-## Data contract (trip.json / trips.json)
+## Data contract — build your own site
 
-The interface between `tripmap/` (producer) and the Lovable site (consumer). Changing a field means updating this section and sending Lovable a prompt.
+A Wander site is any front end that reads two JSON files from the media host: `trips.json` for the landing page and `<slug>/trip.json` for each trip. That's the whole interface between `tripmap/` (producer) and the site (consumer); the live example was built with Lovable from this section alone. Changing a field means updating this section (and the site).
 
-Base: `https://media.job-joseph.com`. All paths below are relative to it unless noted.
+What a site needs to do:
+1. Landing page: fetch `trips.json`; show each trip's `title`, dates, `counts` and cover. For a lock badge, `HEAD <slug>/trip.json` with credentials: 200 = this visitor can open it; anything else = locked.
+2. Trip page: fetch `<slug>/trip.json` with credentials. If it fails, show "This trip is private" and a **Sign in** link to `/auth/<slug>?return=<this page's URL>` ([Worker endpoints](#worker-endpoints)).
+3. Show items on a map (`lat`/`lon`), by day (`days`, `day`), in time order (`t`), with `thumb`/`card`/`media` as image and video sources.
+4. Follow the [client rules](#client-rules) and host the site on the same registrable domain as the media host, with its origin in the Worker's `SITE_ORIGINS`.
+
+Base: `https://<media host>`, e.g. `https://media.example.com`. All paths below are relative to it unless noted.
 
 ### `trips.json` (public)
 ```json
 {
   "version": 1,
   "trips": [{
-    "slug": "thailand-2026",
-    "title": "Thailand 2026",
-    "start": "2026-09-29", "end": "2026-10-10", "days": 12,
-    "cover": "public/covers/thailand-2026-card.jpg?v=3f9a1c07be",
-    "coverImage": "public/covers/thailand-2026.jpg?v=8d21e4a0c5",
-    "counts": { "items": 1034, "photos": 545, "videos": 489, "onMap": 882 },
-    "data": "thailand-2026/trip.json",
-    "updated": "2026-10-12T19:25:06+00:00"
+    "slug": "lisbon-2025",
+    "title": "Lisbon 2025",
+    "start": "2025-05-02", "end": "2025-05-08", "days": 7,
+    "cover": "public/covers/lisbon-2025-card.jpg?v=3f9a1c07be",
+    "coverImage": "public/covers/lisbon-2025.jpg?v=8d21e4a0c5",
+    "counts": { "items": 412, "photos": 350, "videos": 62, "onMap": 398 },
+    "data": "lisbon-2025/trip.json",
+    "updated": "2025-05-20T19:25:06+00:00"
   }]
 }
 ```
@@ -275,18 +284,18 @@ Sorted newest trip first. `cover` ≤640px, `coverImage` 1600px (falls back to `
 ```json
 {
   "version": 1, "title": "...", "slug": "...", "generated": "ISO time",
-  "tzOffsetMin": 420,
+  "tzOffsetMin": 60,
   "start": "YYYY-MM-DD", "end": "YYYY-MM-DD",
   "cover": "cards/<id>.jpg",
   "counts": { "items": 0, "photos": 0, "videos": 0, "onMap": 0 },
   "days": [{ "key": "YYYY-MM-DD", "n": 1, "count": 3 }],
   "items": [{
     "id": "12-hex", "type": "photo|video",
-    "t": 1790632024, "day": "YYYY-MM-DD", "dayN": 1,
-    "lat": 13.7, "lon": 100.5,
+    "t": 1746180000, "day": "YYYY-MM-DD", "dayN": 1,
+    "lat": 38.7, "lon": -9.1,
     "loc": "gps|csv|matched|manual|cleared",
     "conf": "high|medium|low",
-    "dur": 12.0, "orig": "DJI_2026...MP4",
+    "dur": 12.0, "orig": "DJI_2025...MP4",
     "thumb": "thumbs/<id>.jpg", "card": "cards/<id>.jpg", "ar": 1.778,
     "media": "media/<id>.jpg|mp4"
   }]
@@ -299,7 +308,7 @@ Sorted newest trip first. `cover` ≤640px, `coverImage` 1600px (falls back to `
 
 ### Worker endpoints
 - `GET /me` → `{ "email": string|null }` (from the Access cookie; display only).
-- `GET /auth/<slug>?return=<url>` → behind the trip's Access app; 302 to `return` if it's an https `*.job-joseph.com` URL, else to `https://wander.job-joseph.com/<slug>`.
+- `GET /auth/<slug>?return=<url>` → behind the trip's Access app; 302 to `return` if its origin is exactly one of `SITE_ORIGINS` (https), else to `<first site origin>/<slug>`. The site adds `?signedin=1` to `return` to know the visitor just signed in.
 - Logout: `/cdn-cgi/access/logout` (Cloudflare).
 
 ### Client rules
@@ -317,13 +326,14 @@ Sorted newest trip first. `cover` ≤640px, `coverImage` 1600px (falls back to `
 | Free tier only | R2 ≤ 10 GB (~2.5 GB/trip); Cloudflare free plans |
 | One copy of the code | Runs from this repo; trip folders hold only a launcher |
 | Client rules | See [Client rules](#client-rules) |
-| Tested on every push | GitHub Actions runs the tripmap and Worker suites on each push to main; no real exiftool/ffmpeg/rclone, network or trip drive needed. A red build is fixed first |
-| Privacy in git | No media, overrides, CSVs, trip JSON or coordinates committed |
+| Tested on every push | GitHub Actions runs the tripmap, editor and Worker suites on each push to main; no real exiftool/ffmpeg/rclone, network, config or trip drive needed. A red build is fixed first |
+| Privacy in git | No media, overrides, CSVs, trip JSON, coordinates or instance settings committed; docs and tests use example.com |
+| Portable | Windows-tested; mac/Linux should work (`.sh` launcher, no OS-specific paths in code) |
 
 ## Non-goals
 
 - Public sharing of originals
-- Serving originals online, even to the crew. Originals never leave the disk; anyone who wants one asks Job.
+- Serving originals online, even to the crew. Originals never leave the disk; anyone who wants one asks the owner.
 - In-browser editing on the live site
 - A user database or our own auth
 - Subdomains per trip

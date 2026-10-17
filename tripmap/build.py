@@ -373,7 +373,7 @@ def main():
     ap = argparse.ArgumentParser(description="Build an interactive trip map from a media folder.")
     ap.add_argument("input", help="Folder containing photos/videos (scanned recursively)")
     ap.add_argument("--name", default=None, help="Trip title shown on the map")
-    ap.add_argument("--slug", default=None, help="Short web name for this trip, e.g. thailand-2026 (default: from --name)")
+    ap.add_argument("--slug", default=None, help="Short web name for this trip, e.g. lisbon-2025 (default: from --name)")
     ap.add_argument("--out", default=None, help=f"Output folder (default: <input>/{DEFAULT_OUT})")
     ap.add_argument("--tz", required=True,
                     help="Required. The trip's UTC offset, e.g. +07:00: day boundaries and displayed times")

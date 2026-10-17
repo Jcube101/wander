@@ -79,10 +79,10 @@ class Rules(BuildCase):
             {"FileName": "DJI_20270301120000_0001_D.MP4", "Make": "DJI", "CreateDate": "2027:03:01 01:00:00"},
             {"FileName": "DJI_20270301130000_0002_D.MP4", "CreateDate": "2027:03:01 01:00:00"},  # name alone
             photo("DJI_20270301140000_0003_D.JPG", "2027-03-01 14:00:00", "+07:00", Make="DJI"),
-        ], "--camera-offset", "+07:45")
+        ], "--camera-offset", "+05:45")
         # Filename beats QuickTime CreateDate, read at --camera-offset
-        self.assertTime(items["DJI_20270301120000_0001_D.MP4"], ep("2027-03-01 12:00:00", "+07:45"), "dji-filename")
-        self.assertTime(items["DJI_20270301130000_0002_D.MP4"], ep("2027-03-01 13:00:00", "+07:45"), "dji-filename")
+        self.assertTime(items["DJI_20270301120000_0001_D.MP4"], ep("2027-03-01 12:00:00", "+05:45"), "dji-filename")
+        self.assertTime(items["DJI_20270301130000_0002_D.MP4"], ep("2027-03-01 13:00:00", "+05:45"), "dji-filename")
         # Only videos: a DJI photo uses its EXIF time
         self.assertTime(items["DJI_20270301140000_0003_D.JPG"], ep("2027-03-01 14:00:00"), "exif+offset")
 
@@ -286,7 +286,7 @@ class Defaults(BuildCase):
         self.assertEqual(saved[saved.index("--tz") + 1], "+05:30")
         self.assertEqual(saved[saved.index("--camera-offset") + 1], "+00:00")
         self.assertNotIn("--data-only", saved)
-        self.run_build([photo("a.jpg", "2027-03-01 10:00:00")], "--camera-offset", "+07:45", tz="-03:00")
+        self.run_build([photo("a.jpg", "2027-03-01 10:00:00")], "--camera-offset", "+05:45", tz="-03:00")
         saved = json.loads((self.root / "_tripmap" / "build_args.json").read_text(encoding="utf-8"))
         self.assertEqual(saved.count("--camera-offset"), 1)
         self.assertIn("--tz=-03:00", saved)

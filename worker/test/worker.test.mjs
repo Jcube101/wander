@@ -93,7 +93,7 @@ test("conditional request returns 304", async () => {
 
 test("refuses non-allow-listed files, listing, encoding tricks and writes", async () => {
   for (const p of ["/lisbon-2025/trip.js", "/lisbon-2025/index.html", "/", "/lisbon-2025%2Fcards%2Fabc123.jpg",
-                   "/%2e%2e/x.jpg", "/Thailand-2026/cards/abc123.jpg"]) {
+                   "/%2e%2e/x.jpg", "/Lisbon-2025/cards/abc123.jpg"]) {
     const { res } = await call(p);
     assert.equal(res.status, 404, p);
   }

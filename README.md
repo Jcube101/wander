@@ -1,34 +1,101 @@
 # Wander
 
-Private, per-trip travel archive. Photos and videos stay on my hard disk; small previews live in a private Cloudflare R2 bucket; friends sign in with their email to see only the trips they were on.
+A private, map-first archive of your trips. Every photo and video from a trip lands on a map, a day-by-day timeline and a gallery. The originals never leave your disk: only small previews go online, and each trip is visible only to the people who were on it, who sign in with their email. It runs on Cloudflare's free tier (R2, a Worker, Access), with no database and no server to look after.
 
-- **Site:** https://wander.job-joseph.com — front end lives in the Lovable-synced repo [`travelogue-map-memory`](https://github.com/Jcube101/travelogue-map-memory)
-- **Media:** https://media.job-joseph.com — served by the Worker in `worker/`, gated per trip by Cloudflare Access
+**Live example:** [wander.job-joseph.com](https://wander.job-joseph.com). The landing page is public; every trip on it is locked, so you'll see covers and a sign-in button, not the photos.
 
-## What's here
+## Why I built it
 
-| Folder | What it is |
-|---|---|
-| `tripmap/` | Local builder + editor. Reads a trip folder (EXIF, DJI clips, phone photos), builds thumbnails / gallery images / 720p previews, a local map editor for fixing locations, days and times, and a Publish step to R2. |
-| `worker/` | Cloudflare Worker `wander-media` on `media.job-joseph.com`: serves an allow-list of files from the private bucket, Range requests for video, CORS for the site, `/auth/<slug>` sign-in hop, `/me`. |
+I'm Job. In 2026 I spent twelve days in Thailand with friends and came home with about a thousand photos and videos: phone photos with GPS, clips from a DJI pocket camera that records no location and keeps its own clock, and a stream of WhatsApp forwards with their metadata stripped. That's 140 GB of originals.
+
+I wanted us to be able to relive the trip the way it happened: where we were, day by day, in order. Shared albums lose the *where*; cloud drives want all 140 GB and show a grid of files; a public site was out of the question. And I didn't want my friends or my parents to have to create an account anywhere.
+
+So Wander does three things:
+
+1. **Works out when and where each shot happened**, from whatever clues it has: EXIF and GPS, the DJI clock (with an offset you set once), filenames, and the nearest geotagged shot in time.
+2. **Lets you fix what it got wrong** in a local editor: place shots on the map, move them to another day, shift times, pick the cover, hide shots.
+3. **Publishes only previews** (about 2.5 GB per thousand shots) to a private bucket, behind one Cloudflare Access app per trip. Friends get a one-time PIN by email and see only their trips.
+
+The site at wander.job-joseph.com was built with [Lovable](https://lovable.dev) (in [a separate repo](https://github.com/Jcube101/travelogue-map-memory)) on top of two small JSON files. That interface is documented, so you can [build your own site](#build-your-own-site).
+
+## How it fits together
+
+```mermaid
+flowchart LR
+  subgraph PC["Your computer"]
+    T[("Trip folder<br/>originals, overrides.json")]
+    B["tripmap/build.py<br/>times, places, previews"]
+    E["Local editor<br/>127.0.0.1"]
+    P["tripmap/publish.py<br/>(rclone)"]
+    T --> B --> E
+    E -- "fixes" --> T
+    E --> P
+  end
+  subgraph CF["Cloudflare (free tier)"]
+    R2[("R2 bucket, private<br/>trips.json, covers,<br/>one folder per trip")]
+    W["Worker on media.example.com<br/>allow-list, video ranges, CORS"]
+    A{{"Access<br/>one app per trip"}}
+    R2 --> W
+    A -- "only signed-in crew" --> W
+  end
+  S["Your site<br/>wander.example.com<br/>(any static site)"]
+  F(("A friend"))
+  P -- "previews + JSON" --> R2
+  F --> S
+  S -- "fetch with the Access cookie" --> A
+  F -- "email one-time PIN" --> A
+```
+
+- **Originals** stay on your disk. `build.py` reads them (never changes them) and writes `_tripmap/` next to them: thumbnails, 640 px cards, 1600 px photos, 720p videos and the map data.
+- **The editor** (`serve.py` + `viewer.html`) runs only on your machine and saves fixes to `overrides.json` in the trip folder.
+- **Publish** uploads only what the trip's `trip.json` references, then updates the public `trips.json` list and covers.
+- **The Worker** serves an allow-list of files from the private bucket. **Access** decides who sees which trip; the Worker never does.
+- **The site** is just a static page that reads `trips.json` and `<slug>/trip.json` from the media host with the visitor's cookie.
 
 ## Quick start
 
-```powershell
-# one-time
-pip install pillow
-winget install Gyan.FFmpeg OliverBetz.ExifTool Rclone.Rclone
+The local part needs no account: build a trip, then fix it on a map.
 
-# per trip (code always runs from this repo)
-$W = "C:\Users\jobjo\Github\wander\tripmap"
-python "$W\build.py" "D:\<trip>" --name "<Trip title>"
-copy "$W\Open Wander Editor.bat" "D:\<trip>\"
-# edit + publish
-double-click D:\<trip>\Open Wander Editor.bat
+```
+git clone https://github.com/Jcube101/wander
+cd wander
+pip install pillow                     # plus exiftool and ffmpeg, see tripmap/README.md
+python tripmap/build.py "<trip folder>" --name "Lisbon 2025" --tz +01:00 --quick
+python tripmap/launcher.py "<trip folder>"
 ```
 
-New trip with Claude Code: `/new-trip "D:\<trip>" "<Title>" +HH:MM` (follows [`RUNBOOK.md`](RUNBOOK.md) → New trip).
+Then double-click `Open Wander Editor.bat` (Windows) or run `open-wander-editor.sh` (mac/Linux) in the trip folder: the map opens in your browser, in edit mode. `--tz` is the trip's UTC offset; DJI clips need `--camera-offset` too ([tripmap/README.md](tripmap/README.md)).
 
-Worker: `cd worker && npm test && npx wrangler deploy`
+To put trips online behind sign-in, follow **[SETUP.md](SETUP.md)** once: Cloudflare account and domain, R2 bucket, Worker, Access, then your first published trip.
 
-Project docs: [`SPEC.md`](SPEC.md) (what it must do, how the pieces fit, data contract), [`ROADMAP.md`](ROADMAP.md), [`LEARNINGS.md`](LEARNINGS.md) (gotchas, decisions), [`RUNBOOK.md`](RUNBOOK.md) (how to do things).
+Windows-tested; mac/Linux should work.
+
+## Build your own site
+
+A Wander site only needs to read two JSON files from your media host:
+
+- `trips.json` (public): every trip's title, dates, counts and cover, for the landing page.
+- `<slug>/trip.json` (behind Access): the trip's days and items, each with a time, an optional place, and paths to its thumbnail, card and full preview.
+
+Fetch them with `credentials: 'include'`, show times in the trip's own zone, and send people to `/auth/<slug>` to sign in. The [data contract in SPEC.md](SPEC.md#data-contract--build-your-own-site) has the exact shapes and the few rules that matter.
+
+## What's here
+
+| Path | What it is |
+|---|---|
+| [`tripmap/`](tripmap/) | Builder, local editor, publish, Access scripting and launchers (Python, no dependencies besides Pillow). [README](tripmap/README.md) |
+| [`worker/`](worker/) | The Cloudflare Worker for the media host (plain JS, no dependencies). |
+| [`wander.config.example.json`](wander.config.example.json) | Template for your instance settings (`~/.wander/config.json`). |
+
+| Doc | For |
+|---|---|
+| [SETUP.md](SETUP.md) | First-time setup, step by step |
+| [RUNBOOK.md](RUNBOOK.md) | Everyday tasks, a new trip, troubleshooting |
+| [SPEC.md](SPEC.md) | What each part must do, and the data contract |
+| [LEARNINGS.md](LEARNINGS.md) | Gotchas and the decisions behind the design (the real stories) |
+| [ROADMAP.md](ROADMAP.md) | Done, now, next |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Dev setup, tests, the rules every change keeps |
+
+## License
+
+[MIT](LICENSE). A personal project, maintained in spare time.

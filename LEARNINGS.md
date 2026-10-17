@@ -1,6 +1,6 @@
 # Wander — Learnings
 
-Hard-won lessons. Each one: **symptom → cause → fix/rule**. Add new ones here, not in CLAUDE.md. Accepted limitations are rows too; the design decisions behind it all are under [Decisions](#decisions) (D1–D9).
+Hard-won lessons. Each one: **symptom → cause → fix/rule**. Add new ones here, not in CLAUDE.md. Accepted limitations are rows too; the design decisions behind it all are under [Decisions](#decisions) (D1–D10).
 
 ## Cloudflare / hosting
 
@@ -33,6 +33,8 @@ Hard-won lessons. Each one: **symptom → cause → fix/rule**. Add new ones her
 |---|---|---|
 | DJI clips unplaced or at wrong times | DJI Pocket 4P writes no GPS; its clock drifts (~+07:45 vs UTC on Thailand) | Time = filename + `--camera-offset`; location = nearest phone photo or manual fix |
 | WhatsApp items at odd times or other trips | WhatsApp strips EXIF; only the filename date survives | Accepted: time = file save time when it matches the date, else noon; items >1 day outside the trip are dropped; never auto-located (may be friends' photos) |
+| Removing the built-in `+07:00` / `+07:45` defaults would have shifted the Thailand trip by hours on its next Apply | `build_args.json` saved only the options typed, so the trip silently relied on the defaults | Every option that changes results (`--tz`, `--camera-offset`) is saved explicitly; before changing a default, make existing trips' saved options explicit and compare old vs new builds |
+| `--tz -05:00` was rejected | argparse reads `-05:00` as an option, not a value | `build.py` joins offset values to their option (`--tz=-05:00`) before parsing |
 | Some Sony phone JPEGs fail with an empty error | Not confirmed. Full-size decodes failed with an empty error message, mostly during parallel builds | Reduced-size `draft` decoding, sequential retry, log `repr(e)` |
 
 ## Viewer / editor
@@ -81,3 +83,5 @@ Hard-won lessons. Each one: **symptom → cause → fix/rule**. Add new ones her
 **D8 — Worker serves an allow-list and refuses encoded paths.** Prevents Access/Worker path disagreements (e.g. `%2F`) and exposure of non-public files (`trip.js` has local paths).
 
 **D9 — Esri tiles in the local viewer.** CARTO began requiring an API key.
+
+**D10 — One public repo; each instance's settings live outside git.** Domains, bucket, rclone remote and Access naming are in `~/.wander/config.json` (Python tools) and a gitignored `worker/wrangler.toml` (the Worker's route, bucket and `SITE_ORIGINS`), each with a committed `*.example.*` template. Two files rather than one because wrangler needs its own format for routes and bindings; they only share the media host and bucket. Owner-specific notes for Claude Code live in `~/.wander/NOTES.md`, which CLAUDE.md imports when present. Docs and tests use example.com and a made-up trip. Sign-in now returns only to an exact `SITE_ORIGINS` origin (it used to accept any subdomain of the owner's domain).
