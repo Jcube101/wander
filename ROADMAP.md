@@ -48,10 +48,10 @@ Nothing in progress; next up is Go public, task 1.
    - Personal terms appear only in the allowed "story" places.
    - Review `.gitignore`.
    - Prepare the GitHub description, topics and a social-preview image.
-6. **Go public.** Size **S**. Depends on: 5.
-   Flip the visibility and confirm CI is green on the public repo. Check Job's instance: a dry-run publish, `access.py list`, and the site in an incognito window.
-7. **Reference viewer (last).** Size **L**. Depends on: 2 (config), done after 6.
+6. **Reference viewer.** Size **L**. Depends on: 2 (config), done after 5.
    A simple static viewer that reads `trips.json`/`trip.json` through the Worker and can be deployed on Cloudflare Pages, so people don't need Lovable. Reuse the local viewer's map code where it makes sense.
+7. **Go public (Job does this himself).** Size **S**. Depends on: 5, 6.
+   Flip the visibility and confirm CI is green on the public repo. Check Job's instance: a dry-run publish, `access.py list`, and the site in an incognito window.
 
 ## Next
 
