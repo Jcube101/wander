@@ -1,0 +1,22 @@
+# Copy to wrangler.toml (gitignored) and use your own values. See SETUP.md.
+name = "wander-media"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+workers_dev = false
+
+# The Worker answers everything on your media host.
+# (If the R2 bucket has its own custom domain on this host, remove it first:
+# the bucket then has no public address; only this Worker and your rclone key reach it.)
+routes = [
+  { pattern = "media.example.com", custom_domain = true }
+]
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "trip-media"
+
+[vars]
+# Comma-separated origins of your site(s). They may read trips with the Access
+# cookie (CORS with credentials), and sign-in only sends people back to them.
+# The first one is the default place to send people after sign-in.
+SITE_ORIGINS = "https://wander.example.com"

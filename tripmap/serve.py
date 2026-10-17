@@ -3,8 +3,8 @@
 TripMap helper: serves your trip map on this computer only (http://127.0.0.1)
 and lets the map's edit mode save fixes and re-run the builder with buttons.
 
-Start it by double-clicking "Open TripMap.bat", or:
-    python serve.py "D:\\2026_ Thailand Trip"
+Start it by double-clicking the trip folder's launcher, or:
+    python serve.py "<trip folder>"
 
 Close the window to stop it. Nothing is reachable from other devices.
 """
@@ -24,6 +24,9 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import config  # noqa: E402
+
 OUT_NAME = "_tripmap"
 VIEWER_PATHS = ("/", "/index.html")
 for ext, typ in {".js": "text/javascript", ".mp4": "video/mp4", ".json": "application/json",
@@ -260,12 +263,23 @@ def make_handler(root: Path, out: Path, build: Build, port_ref):
     return Handler
 
 
+def publish_target(remote=None):
+    """One line saying where Publish goes, or why it can't yet."""
+    try:
+        cfg = config.load(required=False)
+    except config.ConfigError as e:
+        return f"Publish: won't work until the Wander config is fixed: {e}"
+    if cfg is None:
+        return "Publish: needs a Wander config first (see SETUP.md). Apply and Scan work without one."
+    return f"Publish: to {remote or cfg.remote}, Access checked on {cfg.media_host} ({cfg.path})"
+
+
 def main():
     ap = argparse.ArgumentParser(description="Serve the trip map locally with edit tools.")
     ap.add_argument("trip", nargs="?", default=None, help="Trip folder (default: the folder containing TripMap)")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-browser", action="store_true")
-    ap.add_argument("--remote", default=None, help="rclone remote for Publish (default r2:trip-media)")
+    ap.add_argument("--remote", default=None, help="rclone remote and bucket for Publish (default: from the config)")
     args = ap.parse_args()
 
     root = Path(args.trip).resolve() if args.trip else HERE.parent
@@ -292,6 +306,7 @@ def main():
     print(f"TripMap is running for: {root}")
     print(f"  Edit mode: {url}")
     print(f"  Friends' view (preview): http://127.0.0.1:{port_ref[0]}/")
+    print(f"  {publish_target(args.remote)}")
     print("Keep this window open while you edit. Close it (or Ctrl+C) to stop.\n", flush=True)
     if not args.no_browser:
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()

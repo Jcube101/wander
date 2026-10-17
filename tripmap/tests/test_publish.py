@@ -1,6 +1,7 @@
 """Tests for publish.py: Access guard, upload/delete plan, step order, safety
 switches. rclone and HTTP are mocked. Run: python -m unittest discover tripmap/tests"""
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -8,6 +9,8 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Tests always use the committed example config, never the machine's own.
+os.environ["WANDER_CONFIG"] = str(Path(__file__).resolve().parents[2] / "wander.config.example.json")
 import publish  # noqa: E402
 
 
@@ -49,7 +52,7 @@ class CheckProtected(unittest.TestCase):
 
     def test_asks_like_a_stranger(self):
         _, conn, cls = self.check(status=302)
-        self.assertEqual(cls.call_args[0][0], "media.job-joseph.com")
+        self.assertEqual(cls.call_args[0][0], "media.example.com")
         method, path = conn.request.call_args[0][:2]
         headers = conn.request.call_args[1].get("headers", {})
         self.assertEqual((method, path), ("GET", "/bali-2027/trip.json"))

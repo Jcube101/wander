@@ -10,7 +10,8 @@ Manage Cloudflare Access for Wander trips.
 Write commands take --dry-run (print the plan, change nothing). setup and remove
 ask y/N before writing unless --yes is given.
 
-New trips mirror the Thailand trip's settings (see APP_SETTINGS / POLICY_SESSION).
+Every trip gets the same app and policy settings: APP_SETTINGS below, plus the
+media host, name prefix and session lengths from the Wander config (config.py).
 setup never deletes an app, policy or group; that stays a dashboard action.
 Before any write, groups may only hold email rules and policies only group rules
 with an allow decision; anything else (everyone, service tokens, IP ranges,
@@ -29,25 +30,26 @@ import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import config  # noqa: E402
+
 API = "https://api.cloudflare.com/client/v4"
 CRED_FILE = Path.home() / ".wander" / "cloudflare.env"
-MEDIA_HOST = "media.job-joseph.com"
-DASH = "–"  # the en dash the existing names use: "Wander – All trips"
-ALL_GROUP = f"Wander {DASH} All trips"
+DASH = "–"  # names use an en dash: "Wander – All trips"
 # An empty group can't be saved, so it holds an address that can't exist (RFC 2606 .invalid).
 PLACEHOLDER = "nobody@wander.invalid"
-# Mirrored from the Thailand app (read through the API, 2026-10-16). Change here, not per trip.
+# The same for every trip; change here, not per trip. The app's session length
+# comes from the config (access.appSession), the policy's from access.policySession.
 APP_SETTINGS = {
     "type": "self_hosted",
     "app_launcher_visible": False,
     "auto_redirect_to_identity": False,
-    "session_duration": "24h",
     "http_only_cookie_attribute": False,
     "eager_redirect_cookie_setting": True,
     "enable_binding_cookie": False,
     "options_preflight_bypass": False,
 }
-POLICY_SESSION = "730h"
+CFG = None  # the Wander config, loaded by main() (or on first use)
 # Read-only fields an app GET returns that a PUT must not send back.
 APP_READ_ONLY = {"id", "uid", "aud", "created_at", "updated_at", "self_hosted_domains", "policies"}
 # Worker paths that aren't trips.
@@ -182,25 +184,41 @@ class Client:
 
 # ---------- names and lookups ----------
 
+def cfg():
+    global CFG
+    if CFG is None:
+        CFG = config.load()
+    return CFG
+
+
+def app_settings():
+    return {**APP_SETTINGS, "session_duration": cfg().app_session}
+
+
 def trip_name(title):
     """Short name: the title without a trailing year ("Bali 2027" -> "Bali")."""
     return re.sub(r"\s+\d{4}$", "", title.strip()) or title.strip()
 
 
+def all_group():
+    return f"{cfg().access_prefix} {DASH} All trips"
+
+
 def crew_name(trip):
-    return f"Wander {DASH} {trip} crew"
+    return f"{cfg().access_prefix} {DASH} {trip} crew"
 
 
 def app_name(title):
-    return f"Wander {DASH} {title}"
+    return f"{cfg().access_prefix} {DASH} {title}"
 
 
 def policy_name(trip):
-    return f"Wander {DASH} {trip} viewers"
+    return f"{cfg().access_prefix} {DASH} {trip} viewers"
 
 
 def destinations(slug):
-    return [f"{MEDIA_HOST}/{slug}", f"{MEDIA_HOST}/auth/{slug}"]
+    host = cfg().media_host
+    return [f"{host}/{slug}", f"{host}/auth/{slug}"]
 
 
 def check_slug(slug):
@@ -225,8 +243,9 @@ def by_name(items, name):
 
 
 def find_app(apps, slug, name=None):
-    """The app guarding this slug: matched by destination first (names can drift; the
-    Thailand app was once "media"), else by name. Several candidates is an error."""
+    """The app guarding this slug: matched by destination first (names can drift; an
+    app made in the dashboard may have any name), else by name. Several candidates
+    is an error."""
     want = set(destinations(slug))
     hits = [a for a in apps if want & {d.get("uri") for d in a.get("destinations") or []}]
     if not hits and name:
@@ -258,14 +277,14 @@ def resolve_group(client, target, trip=None):
     includes, else the group named after --trip or the slug."""
     groups = client.list("groups")
     if target == "all":
-        g = by_name(groups, ALL_GROUP)
+        g = by_name(groups, all_group())
         if not g:
-            raise CFError(f"rule group {ALL_GROUP!r} not found")
+            raise CFError(f"rule group {all_group()!r} not found")
         return g
     check_slug(target)
     if not trip:
         app = find_app(client.list("apps"), target)
-        all_id = (by_name(groups, ALL_GROUP) or {}).get("id")
+        all_id = (by_name(groups, all_group()) or {}).get("id")
         if app:
             ids = [r["group"]["id"] for p in app.get("policies") or [] for r in p.get("include") or []
                    if "group" in r and r["group"]["id"] != all_id]
@@ -298,7 +317,7 @@ def diff(live, want, keys):
 
 def app_view(app):
     """The fields setup manages, normalised for comparing."""
-    v = {k: app.get(k) for k in APP_SETTINGS}
+    v = {k: app.get(k) for k in app_settings()}
     v["name"] = app.get("name")
     v["domain"] = app.get("domain")
     v["destinations"] = [d.get("uri") for d in app.get("destinations") or [] if d.get("type") == "public"]
@@ -319,25 +338,25 @@ def cmd_setup(client, args):
     names = {"group": crew_name(trip), "policy": policy_name(trip), "app": app_name(args.title)}
     groups, policies, apps = client.list("groups"), client.list("policies"), client.list("apps")
     idp = otp_idp(client)
-    all_group = by_name(groups, ALL_GROUP)
-    if not all_group:
-        raise CFError(f"rule group {ALL_GROUP!r} not found; create it in the dashboard first")
+    everyone = by_name(groups, all_group())  # the all-trips group
+    if not everyone:
+        raise CFError(f"rule group {all_group()!r} not found; create it in the dashboard first")
     group = by_name(groups, names["group"])
     policy = by_name(policies, names["policy"])
     app = find_app(apps, args.slug, names["app"])
-    for g in filter(None, (all_group, group)):  # a policy would grant whatever these hold
+    for g in filter(None, (everyone, group)):  # a policy would grant whatever these hold
         guard("groups", g)
     ids = {"group": (group or {}).get("id") or "<new crew group>",
            "policy": (policy or {}).get("id") or "<new policy>"}
 
     def want_policy():
         return {"name": names["policy"], "decision": "allow",
-                "include": [{"group": {"id": ids["group"]}}, {"group": {"id": all_group["id"]}}],
-                "exclude": [], "require": [], "session_duration": POLICY_SESSION}
+                "include": [{"group": {"id": ids["group"]}}, {"group": {"id": everyone["id"]}}],
+                "exclude": [], "require": [], "session_duration": cfg().policy_session}
 
     def want_app():
         dest = destinations(args.slug)
-        return {"name": names["app"], "domain": dest[0], **APP_SETTINGS,
+        return {"name": names["app"], "domain": dest[0], **app_settings(),
                 "destinations": [{"type": "public", "uri": u} for u in dest],
                 "allowed_idps": [idp], "policies": [{"id": ids["policy"], "precedence": 1}]}
 
@@ -359,8 +378,8 @@ def cmd_setup(client, args):
         if d:
             steps.append(("policy-update", lambda: client.call("PUT", f"policies/{policy['id']}", want_policy())))
     else:
-        lines.append(f"  policy {names['policy']!r}: CREATE (allow: {names['group']} OR {ALL_GROUP}, "
-                     f"session {POLICY_SESSION})")
+        lines.append(f"  policy {names['policy']!r}: CREATE (allow: {names['group']} OR {all_group()}, "
+                     f"session {cfg().policy_session})")
         steps.append(("policy", lambda: client.call("POST", "policies", want_policy())))
     if app:
         live = app_view(app)
@@ -376,7 +395,7 @@ def cmd_setup(client, args):
             steps.append(("app-update", update_app))
     else:
         lines.append(f"  app {names['app']!r}: CREATE ({', '.join(destinations(args.slug))}; One-time PIN only, "
-                     f"App Launcher hidden, session {APP_SETTINGS['session_duration']})")
+                     f"App Launcher hidden, session {cfg().app_session})")
         steps.append(("app", lambda: client.call("POST", "apps", want_app())))
 
     log(f"Access setup for {args.slug}:")
@@ -401,9 +420,8 @@ def cmd_setup(client, args):
 
 
 def report_protection(slug):
-    sys.path.insert(0, str(HERE))
     import publish
-    ok, status = publish.check_protected(slug)
+    ok, status = publish.check_protected(slug, cfg().media_host)
     if ok:
         log(f"Access check: {slug}/trip.json -> {status} (protected).")
     else:
@@ -491,7 +509,7 @@ def build_parser():
     s.add_argument("slug")
     s.add_argument("title")
     for name in ("add", "remove"):
-        p = sub.add_parser(name, help=f"{name.title()} an email in a trip's crew, or 'all' for {ALL_GROUP}")
+        p = sub.add_parser(name, help=f"{name.title()} an email in a trip's crew, or 'all' for the all-trips group")
         p.add_argument("target", metavar="slug|all")
         p.add_argument("email")
     sub.choices["remove"].add_argument("--revoke", action="store_true",
@@ -513,6 +531,12 @@ def main(argv=None, client=None):
         sys.stdout.reconfigure(errors="replace")
     except (AttributeError, ValueError):
         pass
+    global CFG
+    try:
+        CFG = config.load()
+    except config.ConfigError as e:
+        log(f"ERROR: {e}")
+        return 2
     token = None
     if client is None:
         creds = load_credentials()

@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test test/worker.test.mjs",
+    "predeploy": "node -e \"require('fs').existsSync('wrangler.toml')||(console.error('Copy wrangler.example.toml to wrangler.toml and fill it in first (SETUP.md).'),process.exit(1))\"",
     "deploy": "wrangler deploy"
   }
 }

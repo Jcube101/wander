@@ -26,6 +26,11 @@ trips.json
 build_args.json
 build_errors.txt
 
+# --- Your instance's settings (the *.example.* files are committed) ---
+wander.config.json
+worker/wrangler.toml
+CLAUDE.local.md
+
 # --- Secrets ---
 .env
 .env.*
@@ -39,5 +44,6 @@ __pycache__/
 .venv/
 node_modules/
 .wrangler/
+.playwright-mcp/
 .DS_Store
 Thumbs.db

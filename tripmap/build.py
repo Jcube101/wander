@@ -335,6 +335,18 @@ def slugify(s):
     return s or "trip"
 
 
+def default_contact():
+    """defaults.contact from the Wander config; the build never needs a config."""
+    sys.path.insert(0, str(HERE))
+    import config
+    try:
+        cfg = config.load(required=False)
+    except config.ConfigError as e:
+        log(f"WARNING: ignoring the Wander config: {e}")
+        return ""
+    return cfg.contact if cfg else ""
+
+
 # ---------------------------------------------------------------- main
 
 def main():
@@ -364,10 +376,14 @@ def main():
     ap.add_argument("--crf", type=int, default=28, help="x264 quality for previews (higher = smaller)")
     ap.add_argument("--video-workers", type=int, default=2)
     ap.add_argument("--photo-workers", type=int, default=max(2, (os.cpu_count() or 4) - 1))
-    ap.add_argument("--contact", default="", help="Email/WhatsApp link for 'Request original' (e.g. you@x.com or https://wa.me/91...)")
+    ap.add_argument("--contact", default=None,
+                    help="Email or link for 'Request original' in the local viewer, e.g. you@example.com "
+                         "(default: defaults.contact in the Wander config, else none)")
     ap.add_argument("--limit", type=int, default=0, help="Process only the first N items (testing)")
     args = ap.parse_args()
 
+    if args.contact is None:
+        args.contact = default_contact()
     need("exiftool")
     need("ffmpeg")
     try:

@@ -2,8 +2,10 @@
 """
 Publish a built trip to Cloudflare R2 (or any rclone remote).
 
-    python publish.py "D:\\2026_ Thailand Trip"            # uses r2:trip-media
-    python publish.py "D:\\2026_ Thailand Trip" --dry-run  # show the plan, change nothing
+    python publish.py "<trip folder>"            # to the remote and bucket in your config
+    python publish.py "<trip folder>" --dry-run  # show the plan, change nothing
+
+Needs the Wander config (media host, rclone remote, bucket); see config.py.
 
 Uploads <trip>/_tripmap to <remote>/<slug>/ and updates <remote>/trips.json,
 the list of trips the Wander site shows on its home page.
@@ -34,12 +36,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import config  # noqa: E402
+
 LONG = "Cache-Control: public, max-age=604800"
 NOCACHE = "Cache-Control: no-cache"
 DATA_FILES = ("trip.json",)
 PREVIEW_DIRS = ("thumbs/", "cards/", "media/")
 MAX_DELETE_SHARE = 0.20
-MEDIA_HOST = "media.job-joseph.com"
 # What Access answers a visitor without a cookie. The Worker itself never
 # redirects or refuses trip.json, so these mean the trip's Access app exists.
 PROTECTED = (302, 401, 403)
@@ -72,9 +76,11 @@ def rclone(*args, stdin=None, capture=False):
     return p.wait(), "", last_err
 
 
-def check_protected(slug, host=MEDIA_HOST, timeout=15):
+def check_protected(slug, host=None, timeout=15):
     """Ask for the trip's data as a stranger would (no cookies, no redirects).
-    Returns (protected, status); status is the HTTP code or the error text."""
+    Returns (protected, status); status is the HTTP code or the error text.
+    host defaults to the media host in the config."""
+    host = host or config.load().media_host
     conn = http.client.HTTPSConnection(host, timeout=timeout)
     try:
         conn.request("GET", f"/{slug}/trip.json", headers={"User-Agent": "wander-publish"})
@@ -156,7 +162,7 @@ def write_list(paths):
 def main():
     ap = argparse.ArgumentParser(description="Publish a built trip to R2 via rclone.")
     ap.add_argument("trip", nargs="?", default=None, help="Trip folder (default: the folder containing TripMap)")
-    ap.add_argument("--remote", default="r2:trip-media", help="rclone remote and bucket (default r2:trip-media)")
+    ap.add_argument("--remote", default=None, help="rclone remote and bucket, e.g. r2:trip-media (default: from the config)")
     ap.add_argument("--transfers", type=int, default=16, help="Files uploaded in parallel (default 16)")
     ap.add_argument("--allow-unprotected", action="store_true",
                     help="Publish even if no Cloudflare Access app guards this trip yet")
@@ -170,6 +176,10 @@ def main():
     except (AttributeError, ValueError):
         pass
 
+    try:
+        cfg = config.load()
+    except config.ConfigError as e:
+        sys.exit(f"ERROR: {e}")
     if not shutil.which("rclone"):
         sys.exit("rclone isn't installed or not on PATH. Install it with: winget install Rclone.Rclone")
     root = Path(args.trip).resolve() if args.trip else HERE.parent
@@ -184,14 +194,14 @@ def main():
     if args.allow_unprotected:
         log(f"WARNING: skipping the Access check; {slug} may be visible to anyone.")
     else:
-        protected, status = check_protected(slug)
+        protected, status = check_protected(slug, cfg.media_host)
         if not protected:
             how = f"got {status}" if isinstance(status, int) else f"couldn't check: {status}"
             sys.exit(f"ERROR: {slug} isn't protected by Cloudflare Access ({how}). "
                      f"Create the Access app for {slug} first, see RUNBOOK.md"
                      f"{'' if isinstance(status, int) else ' (or use --allow-unprotected)'}")
         log(f"Access check: {slug} is protected ({status}).")
-    remote = args.remote.rstrip("/")
+    remote = (args.remote or cfg.remote).rstrip("/")
     dst = f"{remote}/{slug}"
     stats = ["--stats", "3s", "--stats-one-line", "--stats-log-level", "NOTICE"]
     speed = ["--transfers", str(args.transfers), "--checkers", "16", "--s3-upload-concurrency", "4"]
@@ -325,6 +335,8 @@ def main():
                  f"The site no longer shows them; publish again to retry.")
     log(f"Published. {trip['counts']['items']} shots live under {slug}/ "
         f"({len(trips)} trip{'s' if len(trips) != 1 else ''} in the archive).")
+    if cfg.site_url:
+        log(f"Site: {cfg.site_url}/{slug}")
     for s in storage:  # again, so it's in the editor's last log lines
         log(s)
 

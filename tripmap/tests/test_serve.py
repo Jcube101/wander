@@ -2,6 +2,7 @@
 copy in _tripmap/. Run: python -m unittest discover tripmap/tests"""
 import http.client
 import json
+import os
 import sys
 import tempfile
 import threading
@@ -11,6 +12,8 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Tests always use the committed example config, never the machine's own.
+os.environ["WANDER_CONFIG"] = str(Path(__file__).resolve().parents[2] / "wander.config.example.json")
 import serve  # noqa: E402
 
 

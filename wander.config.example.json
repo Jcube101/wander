@@ -1,0 +1,21 @@
+{
+  "//": "Copy to ~/.wander/config.json (Windows: %USERPROFILE%\\.wander\\config.json) and use your own values. See SETUP.md.",
+  "site": {
+    "url": "https://wander.example.com"
+  },
+  "media": {
+    "host": "media.example.com"
+  },
+  "storage": {
+    "remote": "r2",
+    "bucket": "trip-media"
+  },
+  "access": {
+    "prefix": "Wander",
+    "appSession": "24h",
+    "policySession": "730h"
+  },
+  "defaults": {
+    "contact": ""
+  }
+}

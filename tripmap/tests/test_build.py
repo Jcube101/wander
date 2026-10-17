@@ -4,6 +4,7 @@ Builds a tiny fixture trip (real 32x24 JPEGs, exiftool stubbed) with made-up
 coordinates, so no ffmpeg or exiftool is needed (video previews are faked).
 """
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -11,6 +12,8 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Tests always use the committed example config, never the machine's own.
+os.environ["WANDER_CONFIG"] = str(Path(__file__).resolve().parents[2] / "wander.config.example.json")
 import build  # noqa: E402
 
 # name, local time (tz +00:00), (lat, lon) or None. Coordinates are fake.

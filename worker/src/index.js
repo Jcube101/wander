@@ -1,19 +1,29 @@
 // wander-media: serves trip media from the private R2 bucket at
-// https://media.job-joseph.com/<key>
+// https://<media host>/<key>
 //
 // Who may see what is decided by Cloudflare Access *before* this Worker runs:
 // one Access application per trip covering
-//   media.job-joseph.com/<slug>        (the trip's data, photos and videos)
-//   media.job-joseph.com/auth/<slug>   (the sign-in hop used by the website)
+//   <media host>/<slug>        (the trip's data, photos and videos)
+//   <media host>/auth/<slug>   (the sign-in hop used by the website)
 // This Worker only serves an explicit allow-list of files, never lists the
 // bucket, supports Range requests (video seeking), and answers the website's
-// cross-site requests from wander.job-joseph.com with cookies allowed.
+// cross-site requests with cookies allowed.
+//
+// Settings (wrangler.toml [vars]):
+//   SITE_ORIGINS  comma-separated site origins, e.g. "https://wander.example.com".
+//                 They get CORS with credentials, and /auth only sends people back
+//                 to them. The first one is where /auth goes when no return is given.
 
-const SITE_ORIGINS = new Set([
-  "https://wander.job-joseph.com",
-  "https://id-preview--a7f27062-3286-4c42-bf0c-e191ee723d94.lovable.app", // Lovable preview
-]);
-const SITE_HOST_SUFFIX = ".job-joseph.com"; // where /auth may send people back to
+// Parsed once per SITE_ORIGINS value.
+let parsed = { raw: null, list: [], set: new Set() };
+function siteOrigins(env) {
+  const raw = (env && env.SITE_ORIGINS) || "";
+  if (raw !== parsed.raw) {
+    const list = raw.split(",").map((s) => s.trim().replace(/\/+$/, "")).filter(Boolean);
+    parsed = { raw, list, set: new Set(list) };
+  }
+  return parsed;
+}
 
 const ALLOWED = new RegExp(
   "^(?:" +
@@ -25,9 +35,9 @@ const ALLOWED = new RegExp(
 const PUBLIC = /^(?:trips\.json|public\/.+)$/;
 const TYPES = { json: "application/json", jpg: "image/jpeg", mp4: "video/mp4" };
 
-function corsHeaders(request) {
+function corsHeaders(request, sites) {
   const origin = request.headers.get("origin");
-  if (!origin || !SITE_ORIGINS.has(origin)) return {};
+  if (!origin || !sites.set.has(origin)) return {};
   return {
     "access-control-allow-origin": origin,
     "access-control-allow-credentials": "true",
@@ -63,10 +73,11 @@ function signedInEmail(request) {
   }
 }
 
-function safeReturn(raw, fallback) {
+// Only back to one of the site origins (exact scheme + host + port), else the fallback.
+function safeReturn(raw, sites, fallback) {
   try {
     const u = new URL(raw);
-    if (u.protocol === "https:" && (u.hostname === SITE_HOST_SUFFIX.slice(1) || u.hostname.endsWith(SITE_HOST_SUFFIX))) return u.toString();
+    if (u.protocol === "https:" && sites.set.has(u.origin)) return u.toString();
   } catch {}
   return fallback;
 }
@@ -74,7 +85,8 @@ function safeReturn(raw, fallback) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const cors = corsHeaders(request);
+    const sites = siteOrigins(env);
+    const cors = corsHeaders(request, sites);
 
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: { ...cors, "access-control-max-age": "86400" } });
@@ -91,7 +103,8 @@ export default {
     // Sign-in hop: Access guards /auth/<slug>; once signed in, send them back.
     const auth = path.match(/^auth\/([a-z0-9-]+)$/);
     if (auth) {
-      const back = safeReturn(url.searchParams.get("return"), `https://wander.job-joseph.com/${auth[1]}`);
+      if (!sites.list.length) return text("Not configured: set SITE_ORIGINS in wrangler.toml", 500);
+      const back = safeReturn(url.searchParams.get("return"), sites, `${sites.list[0]}/${auth[1]}`);
       return new Response(null, { status: 302, headers: { location: back, "cache-control": "no-store" } });
     }
 

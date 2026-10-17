@@ -5,6 +5,7 @@ Each test feeds made-up exiftool rows (exiftool stubbed) to a --data-only build,
 so no media files, ffmpeg or trip drive are needed. Dates and coordinates are fake.
 """
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -13,6 +14,8 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Tests always use the committed example config, never the machine's own.
+os.environ["WANDER_CONFIG"] = str(Path(__file__).resolve().parents[2] / "wander.config.example.json")
 import build  # noqa: E402
 
 
