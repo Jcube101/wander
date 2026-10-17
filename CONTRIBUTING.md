@@ -19,12 +19,13 @@ To try the tools for real you'll also want exiftool and ffmpeg ([tripmap/README.
 
 ## Run the tests
 
-The same three commands CI runs on every push (`.github/workflows/test.yml`):
+The same commands CI runs on every push (`.github/workflows/test.yml`), each from the repo root:
 
 ```
 python -m unittest discover tripmap/tests     # builder, editor server, publish, access, config, launchers
 node --test tripmap/tests/test_viewer.mjs      # editor helpers from viewer.html
-cd worker && npm test                          # the Worker, with a mocked R2 bucket
+npm --prefix worker test                       # the Worker, with a mocked R2 bucket
+npm --prefix site test                         # the reference viewer's helpers
 ```
 
 Tests use `wander.config.example.json` (example.com and a made-up trip), never your own config. `tripmap/tests/test_build_rules.py` locks in how times and locations are worked out; if you change that behaviour on purpose, change the test with it and say why.
@@ -40,7 +41,7 @@ Tests use `wander.config.example.json` (example.com and a made-up trip), never y
 ## Report a bug or propose a change
 
 1. **Open an issue first.** Say what you did, what you expected and what happened (for build problems: the build's last lines and your OS). Please leave out photos, coordinates and email addresses. For a new feature, describe the problem before the solution, so we can agree on the approach before you spend time on it.
-2. **Then a pull request,** small and about one thing. Include tests for behaviour changes, keep the docs in step (README, SPEC, RUNBOOK), and make sure the three test commands above pass.
+2. **Then a pull request,** small and about one thing. Include tests for behaviour changes, keep the docs in step (README, SPEC, RUNBOOK), and make sure the test commands above pass.
 3. **Security problems** (anything that could show a trip to the wrong person): please don't open a public issue. Use GitHub's "Report a vulnerability" (Security tab) instead.
 
 By contributing you agree that your contribution is licensed under the [MIT License](LICENSE).

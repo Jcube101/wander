@@ -7,7 +7,9 @@ Tooling and infrastructure for Wander, a private multi-trip travel archive. Two 
 - `tripmap/` — Python (3.9+, Pillow; shells out to exiftool, ffmpeg, rclone). Builds a trip folder into map data and previews, runs the local editor, publishes to R2, manages Cloudflare Access. Runs **from this repo** against a trip folder (often on an external drive); each trip folder only holds the launcher that `tripmap/launcher.py` writes. Never copy the code into trip folders.
 - `worker/` — Cloudflare Worker (plain JS, no deps) bound to a private R2 bucket, on the instance's media host.
 
-The website is not in this repo: any static site that follows the data contract can be the front end.
+- `site/` — reference viewer: a static site (HTML/CSS/JS modules, Leaflet) that reads the data contract; deployable to Cloudflare Pages. Media host in `site/public/config.js` (example.com in git).
+
+The live instance's own website may live elsewhere (see the instance notes); any static site that follows the data contract can be the front end.
 
 ## Instance settings (never in git)
 - `~/.wander/config.json` (or `wander.config.json` in the repo root, or `$WANDER_CONFIG`): site URL, media host, rclone remote + bucket, Access name prefix and session lengths. Template: `wander.config.example.json`; loaded by `tripmap/config.py`.
@@ -40,8 +42,9 @@ Use `/new-trip`, which follows `RUNBOOK.md` → New trip.
 ## Testing
 - Worker: `cd worker && npm test` (node, mocked R2 bucket).
 - Editor: `node --test tripmap/tests/test_viewer.mjs` (pure helpers extracted from `viewer.html`'s `<script id="tripmap-pure">` block).
+- Reference viewer: `cd site && npm test` (pure helpers in `site/public/lib.js`).
 - tripmap: `python -m unittest discover tripmap/tests` (time/location rules, archive, cover, publish, serve, access, config, launchers; exiftool/ffmpeg/rclone/network and the Cloudflare API are stubbed). Tests always use `wander.config.example.json`. `test_build_rules.py` locks in current time/location behaviour: if a change there is intended, update the test with it.
-- CI (`.github/workflows/test.yml`) runs all three on every push to main. After every push, check the run with `gh run list --limit 1` (or `gh run watch`). Fix a red build before doing anything else. The runner is pinned to `ubuntu-24.04` (not `ubuntu-latest`) so an image switch can't break CI unannounced; bump it on purpose later, in its own commit, and check the run.
+- CI (`.github/workflows/test.yml`) runs all four on every push to main. After every push, check the run with `gh run list --limit 1` (or `gh run watch`). Fix a red build before doing anything else. The runner is pinned to `ubuntu-24.04` (not `ubuntu-latest`) so an image switch can't break CI unannounced; bump it on purpose later, in its own commit, and check the run.
 
 ## Project docs
 - `README.md` — what it is, why it exists, architecture, quick start.

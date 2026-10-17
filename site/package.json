@@ -1,0 +1,8 @@
+{
+  "name": "wander-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/test_site.mjs"
+  }
+}

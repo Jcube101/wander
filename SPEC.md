@@ -58,6 +58,7 @@ wander.example.com  — any static site (the live example is built with Lovable)
 | **Worker** (`worker/`) | The media host | Serves an allow-list of R2 keys; settings in `wrangler.toml` (`SITE_ORIGINS`) |
 | **Cloudflare Access** | Zero Trust, in front of the Worker | Decides who sees which trip |
 | **Site** | The site host, same registrable domain as the media host | Consumes the [data contract](#data-contract--build-your-own-site) |
+| **Reference viewer** (`site/public/`) | Any static host, e.g. Cloudflare Pages | One such site: trip list with lock badges; per trip a map, day filter, gallery, viewer and sign-in. Media host set in `config.js`; no build step, no browser storage |
 
 ## Functional requirements
 

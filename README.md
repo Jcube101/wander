@@ -16,7 +16,7 @@ So Wander does three things:
 2. **Lets you fix what it got wrong** in a local editor: place shots on the map, move them to another day, shift times, pick the cover, hide shots.
 3. **Publishes only previews** (about 2.5 GB per thousand shots) to a private bucket, behind one Cloudflare Access app per trip. Friends get a one-time PIN by email and see only their trips.
 
-The site at wander.job-joseph.com was built with [Lovable](https://lovable.dev) (in [a separate repo](https://github.com/Jcube101/travelogue-map-memory)) on top of two small JSON files. That interface is documented, so you can [build your own site](#build-your-own-site).
+The site at wander.job-joseph.com was built with [Lovable](https://lovable.dev) (in [a separate repo](https://github.com/Jcube101/travelogue-map-memory)) on top of two small JSON files. That interface is documented, so you can [build your own site](#build-your-own-site), or start from the [reference viewer](site/).
 
 ## How it fits together
 
@@ -79,12 +79,15 @@ A Wander site only needs to read two JSON files from your media host:
 
 Fetch them with `credentials: 'include'`, show times in the trip's own zone, and send people to `/auth/<slug>` to sign in. The [data contract in SPEC.md](SPEC.md#data-contract--build-your-own-site) has the exact shapes and the few rules that matter.
 
+Or use the **[reference viewer](site/)**: a static site (no build step) with the trip list, a map, day filter, gallery, photo/video viewer and the sign-in flow. Set your media host in one file and deploy it to Cloudflare Pages.
+
 ## What's here
 
 | Path | What it is |
 |---|---|
 | [`tripmap/`](tripmap/) | Builder, local editor, publish, Access scripting and launchers (Python, no dependencies besides Pillow). [README](tripmap/README.md) |
 | [`worker/`](worker/) | The Cloudflare Worker for the media host (plain JS, no dependencies). |
+| [`site/`](site/) | Reference viewer: a static site for your trips, deployable to Cloudflare Pages. [README](site/README.md) |
 | [`wander.config.example.json`](wander.config.example.json) | Template for your instance settings (`~/.wander/config.json`). |
 
 | Doc | For |

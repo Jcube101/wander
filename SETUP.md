@@ -151,6 +151,7 @@ Say the trip is "Lisbon 2025" (slug `lisbon-2025`) in a folder of photos and vid
 
 Any static site can be the front end; it only reads JSON from the media host.
 
+- **Use the reference viewer:** set your media host in `site/public/config.js` and deploy the folder to Cloudflare Pages ([site/README.md](site/README.md)). About ten minutes.
 - **Build your own:** the [data contract](SPEC.md#data-contract--build-your-own-site) has the two file formats and the client rules (credentials, no `crossorigin` on media tags, times in the trip's zone, the `/auth/<slug>` sign-in hop). The live example was built with Lovable from that contract.
 
 Wherever it's hosted, give it a host name on the same domain as the media host (e.g. `wander.example.com`) and make sure its origin is in the Worker's `SITE_ORIGINS` (step 5; redeploy after changing it).

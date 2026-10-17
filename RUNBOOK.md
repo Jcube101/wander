@@ -13,7 +13,7 @@ How to do things once Wander is set up ([SETUP.md](SETUP.md)). Commands run from
 | Check a publish first | `python tripmap/publish.py "<trip folder>" --dry-run` → upload count + delete list, nothing changed |
 | Give someone access | `python tripmap/access.py add <slug> <email>` (or `add all <email>` for the all-trips group). Check with `list <slug>`. Fallback: Zero Trust → Access → Rule groups → add the email |
 | Remove someone | `python tripmap/access.py remove <slug> <email>` (asks y/N); add `--revoke` to end their live sessions now (all apps; they can sign back in to trips they're still allowed). Fallback: delete the email from the group; Zero Trust → Users → revoke session |
-| Change the site | Wherever your site lives. If it's a builder like Lovable: prompt, then re-publish it there (edits only reach the live domain after publishing) |
+| Change the site | Reference viewer: edit `site/public/`, then `npx wrangler pages deploy site/public --project-name <name>` ([site/README.md](site/README.md)). A builder like Lovable: prompt, then re-publish it there (edits only reach the live domain after publishing) |
 | Change the editor/builder | Edit in the repo → `viewer.html`: refresh the editor page · `build.py`/`publish.py`: used on the next Apply/Scan/Publish · `serve.py`: restart the launcher → run the tests ([CONTRIBUTING.md](CONTRIBUTING.md#run-the-tests)) |
 | Change the Worker | `cd worker && npm test && npx wrangler deploy`, then the checks under [Worker deploys](#worker-deploys) |
 | Move the repo | Re-run `python tripmap/launcher.py "<trip folder>" --force` for each trip, so its launcher points at the new place |
