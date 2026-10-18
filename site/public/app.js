@@ -104,7 +104,7 @@ function privatePage(slug, justSignedIn) {
     ? `<p>You're signed in, but this trip hasn't been shared with your email. Ask whoever runs this site to add you, or <a href="${esc(W.signOutUrl(MEDIA))}">sign out</a> and use another address.</p>`
     : `<p>Only the people who were on this trip can see it. Sign in with your email; you'll get a one-time code.</p>
        <p><a class="btn" href="${esc(W.signInUrl(MEDIA, slug, location.href))}">Sign in</a></p>`;
-  view.innerHTML = `<section class="private"><h1>This trip is private</h1>${body}<p><a href="./">← All trips</a></p></section>`;
+  view.innerHTML = `<section class="private"><h1>This trip is private</h1>${body}<p><a href="/">← All trips</a></p></section>`;
 }
 
 async function tripPage(slug) {
@@ -123,7 +123,7 @@ async function tripPage(slug) {
   const items = W.itemsFor(trip.items);
   const byId = new Map(items.map((x) => [x.id, x]));
 
-  view.innerHTML = `<section class="trip-head"><a href="./" class="muted">← All trips</a>
+  view.innerHTML = `<section class="trip-head"><a href="/" class="muted">← All trips</a>
       <h1>${esc(trip.title)}</h1><p>${esc(W.fmtRange(trip.start, trip.end))} · ${esc(W.tripSummary(trip))}</p></section>
     <nav class="days" id="days" aria-label="Days"></nav>
     <div class="split"><div id="map" role="region" aria-label="Map"></div><section class="grid" id="grid" aria-label="Photos and videos"></section></div>`;

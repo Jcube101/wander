@@ -34,7 +34,7 @@ Open http://127.0.0.1:8000. You'll see your trips and covers, but trips won't op
 4. Add that origin to the Worker's `SITE_ORIGINS` in `worker/wrangler.toml` (comma-separated, e.g. `"https://wander.example.com"`) and redeploy the Worker (`cd worker && npx wrangler deploy`).
 5. Check in a private window: the landing page lists your trips with 🔒 badges; open one → **Sign in** → enter the emailed code → you're back on the trip and photos load.
 
-Trip links look like `/?trip=lisbon-2025`. On Pages, `/lisbon-2025` works too (Pages serves `index.html` for unknown paths when there's no `404.html`).
+Trip links look like `/?trip=lisbon-2025`. On Pages, `/lisbon-2025` and `/lisbon-2025/` work too (Pages serves `index.html` for unknown paths when there's no `404.html`). That's why asset and home links are root-absolute (`/app.js`, `/`): serve the folder from the root of its host name, as above, not from a sub-path.
 
 ## How it follows the client rules
 

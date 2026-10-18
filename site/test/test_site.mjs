@@ -1,10 +1,24 @@
 // Run: node --test site/test/test_site.mjs   (plain node, no dependencies)
 // The reference viewer's pure helpers (site/public/lib.js), checked against the data contract.
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 import * as W from "../public/lib.js";
 
 const MEDIA = "https://media.example.com";
+const PUBLIC = new URL("../public/", import.meta.url);
+
+test("assets and home links resolve the same from /, /<slug> and /<slug>/ (Pages serves index.html for all three)", () => {
+  const src = readFileSync(new URL("index.html", PUBLIC), "utf8") + readFileSync(new URL("app.js", PUBLIC), "utf8");
+  const refs = [...src.matchAll(/\b(?:src|href)="([^"$]*)"/g)].map((m) => m[1])
+    .filter((r) => !/^(?:https?:|data:|#|\?)/.test(r));
+  assert.ok(refs.includes("/app.js") && refs.includes("/style.css"), refs.join(" "));
+  for (const ref of refs) {
+    const paths = ["/", "/lisbon-2025", "/lisbon-2025/"].map((p) => new URL(ref, "https://wander.example.com" + p).pathname);
+    assert.equal(new Set(paths).size, 1, `${ref} resolves to ${paths.join(", ")}`);
+    if (paths[0] !== "/") assert.ok(existsSync(new URL("." + paths[0], PUBLIC)), `${ref}: no such file in public/`);
+  }
+});
 
 test("URLs: one slash, covers prefer the right size, item paths are relative to the trip", () => {
   assert.equal(W.joinUrl(MEDIA + "/", "/trips.json"), "https://media.example.com/trips.json");

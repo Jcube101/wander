@@ -54,6 +54,7 @@ Hard-won lessons. Each one: **symptom → cause → fix/rule**. Add new ones her
 |---|---|---|
 | Captions said "gps" | Site displayed the internal `loc` field | `loc` is a source code — never display it |
 | Landing hero blurry | 640 px card used as a full-width hero | Publish a 1600 px `coverImage` too |
+| Reference viewer stuck on "Loading…", unstyled, at `/<slug>/` on Pages | Relative `app.js`/`style.css` resolved under `/<slug>/`, and Pages' SPA fallback answered them with `index.html` (text/html), which browsers refuse as a module or stylesheet | Root-absolute asset and home links (`/app.js`, `/`); a site test resolves them from `/`, `/<slug>` and `/<slug>/`. Serve the viewer from the root of its host name |
 
 ## Dev workflow
 
