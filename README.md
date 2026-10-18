@@ -79,7 +79,11 @@ A Wander site only needs to read two JSON files from your media host:
 
 Fetch them with `credentials: 'include'`, show times in the trip's own zone, and send people to `/auth/<slug>` to sign in. The [data contract in SPEC.md](SPEC.md#data-contract--build-your-own-site) has the exact shapes and the few rules that matter.
 
-Or use the **[reference viewer](site/)**: a static site (no build step) with the trip list, a map, day filter, gallery, photo/video viewer and the sign-in flow. Set your media host in one file and deploy it to Cloudflare Pages.
+Or use the **[reference viewer](site/)**: a static site (no build step) with the trip list, a map, day filter, gallery, photo/video viewer and the sign-in flow. Put your media host in `site/public/config.local.js` and deploy it to Cloudflare Pages.
+
+![The reference viewer's landing page: one trip card with its cover, dates and counts, and a "Private" lock badge](docs/viewer-landing.png)
+
+*The reference viewer's landing page, run locally against the live media host. Visitors see each trip's cover and a lock until they sign in.*
 
 ## What's here
 

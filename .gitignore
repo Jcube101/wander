@@ -27,10 +27,14 @@ trip.js
 trips.json
 build_args.json
 build_errors.txt
+# The one exception: the README screenshot of the reference viewer's landing page
+# (public covers and lock badges only; no trip contents).
+!/docs/viewer-landing.png
 
 # --- Your instance's settings (the *.example.* files are committed) ---
 wander.config.json
 worker/wrangler.toml
+site/public/config.local.js
 CLAUDE.local.md
 
 # --- Secrets ---

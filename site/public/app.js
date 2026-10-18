@@ -1,9 +1,11 @@
 // Wander reference viewer: a static page that reads trips.json and <slug>/trip.json from the
 // media host (SPEC.md → "Data contract — build your own site"). No build step, no storage:
 // trip data lives only in memory. Map code follows the local editor (tripmap/viewer.html).
-import config from "./config.js";
+import base from "./config.js";
 import * as W from "./lib.js";
 
+// Your own values go in config.local.js (gitignored); it's optional.
+const config = await W.loadConfig(base, () => import("./config.local.js"));
 const MEDIA = String(config.media || "").replace(/\/+$/, "");
 const TITLE = config.title || "Wander";
 const $ = (s, el = document) => el.querySelector(s);
@@ -20,10 +22,10 @@ function notice(html) {
 
 try {
   if (/(^|\.)example\.com$/.test(new URL(MEDIA).hostname)) {
-    notice("This viewer still points at <code>media.example.com</code>. Put your media host in <code>config.js</code> (see site/README.md).");
+    notice("This viewer still points at <code>media.example.com</code>. Put your media host in <code>config.local.js</code> (see site/README.md).");
   }
 } catch {
-  notice("<code>config.js</code> needs your media host, e.g. <code>https://media.example.com</code>.");
+  notice("<code>config.local.js</code> (or <code>config.js</code>) needs your media host, e.g. <code>https://media.example.com</code>.");
 }
 
 // ---------------------------------------------------------------- network

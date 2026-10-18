@@ -80,6 +80,22 @@ test("trips newest first; items by day in time order; unplaced items stay in the
   assert.equal(W.dayLabel({ n: 3, key: "2025-05-04" }), "Day 3 · Sun 4 May");
 });
 
+test("config.local.js overrides config.js key by key; a missing one is skipped silently", async (t) => {
+  const base = { media: "https://media.example.com", title: "Wander" };
+  const warn = t.mock.method(console, "warn", () => {});
+  const local = (cfg) => async () => ({ default: cfg });
+  assert.deepEqual(await W.loadConfig(base, local({ media: "https://media.lisbon.test" })),
+    { media: "https://media.lisbon.test", title: "Wander" });
+  assert.deepEqual(await W.loadConfig(base, local(undefined)), base); // no default export
+  const missing = async () => { throw new TypeError("Failed to fetch dynamically imported module"); };
+  assert.deepEqual(await W.loadConfig(base, missing), base);
+  assert.equal(warn.mock.callCount(), 0);
+  const broken = async () => { throw new SyntaxError("Unexpected token '}'"); };
+  assert.deepEqual(await W.loadConfig(base, broken), base);
+  assert.equal(warn.mock.callCount(), 1); // there, but broken: say so
+  assert.equal(base.media, "https://media.example.com");
+});
+
 test("lightbox stepping wraps; HTML escaping", () => {
   assert.equal(W.step(0, 3, -1), 2);
   assert.equal(W.step(2, 3, 1), 0);

@@ -14,6 +14,19 @@ export function joinUrl(base, path) {
   return `${String(base).replace(/\/+$/, "")}/${String(path).replace(/^\/+/, "")}`;
 }
 
+/** config.js overridden key by key by config.local.js (gitignored, for your own values).
+ *  `importLocal` loads that file. One that can't be fetched (TypeError: missing, or a host's
+ *  HTML fallback) is skipped silently; one that's there but fails to run gets a warning. */
+export async function loadConfig(base, importLocal) {
+  try {
+    const local = (await importLocal()).default;
+    return { ...base, ...(local && typeof local === "object" ? local : {}) };
+  } catch (e) {
+    if (!(e instanceof TypeError)) console.warn("config.local.js failed to load; using config.js.", e);
+    return { ...base };
+  }
+}
+
 /** Landing-page cover: the 1600 px coverImage when there is one, else the 640 px cover. */
 export function coverUrl(media, trip) {
   const p = trip.coverImage || trip.cover;

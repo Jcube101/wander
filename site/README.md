@@ -4,7 +4,8 @@ A small static site for your Wander trips: a landing page of trips with covers a
 
 | File (in `public/`) | What it is |
 |---|---|
-| `config.js` | Your media host and site title. **Edit this.** |
+| `config.js` | Defaults: media host (`media.example.com`) and site title |
+| `config.local.js` | **Yours, not in git** (gitignored; create it). Its keys override `config.js`, e.g. `export default { media: "https://media.your-domain.com" };`. Optional: skipped when it's missing, with a console warning if it's there but broken |
 | `index.html`, `style.css` | The page |
 | `app.js` | Fetching, map, gallery, viewer, sign-in |
 | `lib.js` | Pure helpers (URLs, dates in the trip's zone, sign-in link), tested by `test/test_site.mjs` |
@@ -12,15 +13,17 @@ A small static site for your Wander trips: a landing page of trips with covers a
 
 ## Try it locally
 
+Put your media host in `site/public/config.local.js` (above), then:
+
 ```
 python -m http.server 8000 -d site/public
 ```
 
-Open http://127.0.0.1:8000. With `config.js` pointing at your media host you'll see your trips and covers, but trips won't open: the page's origin isn't in the Worker's `SITE_ORIGINS`, and it isn't on your domain, so the sign-in cookie wouldn't reach it anyway. The page says so.
+Open http://127.0.0.1:8000. You'll see your trips and covers, but trips won't open: the page's origin isn't in the Worker's `SITE_ORIGINS`, and it isn't on your domain, so the sign-in cookie wouldn't reach it anyway. The page says so. Without `config.local.js` the page uses `config.js` (example.com) and says that instead; the browser's console shows one 404 for the missing file, which the page ignores.
 
 ## Deploy on Cloudflare Pages
 
-1. Set `media` (and `title` if you like) in `public/config.js`.
+1. Set `media` (and `title` if you like) in `public/config.local.js`. `wrangler pages deploy` uploads the folder as it is on your disk, `config.local.js` included. A Pages project connected to your fork builds from git, where `config.local.js` doesn't exist: set them in `config.js` in your fork instead.
 2. Deploy the folder (Node 18+; `npx wrangler login` once):
    ```
    npx wrangler pages project create wander-site     # first time only

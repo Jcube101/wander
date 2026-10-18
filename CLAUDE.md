@@ -7,13 +7,14 @@ Tooling and infrastructure for Wander, a private multi-trip travel archive. Two 
 - `tripmap/` — Python (3.9+, Pillow; shells out to exiftool, ffmpeg, rclone). Builds a trip folder into map data and previews, runs the local editor, publishes to R2, manages Cloudflare Access. Runs **from this repo** against a trip folder (often on an external drive); each trip folder only holds the launcher that `tripmap/launcher.py` writes. Never copy the code into trip folders.
 - `worker/` — Cloudflare Worker (plain JS, no deps) bound to a private R2 bucket, on the instance's media host.
 
-- `site/` — reference viewer: a static site (HTML/CSS/JS modules, Leaflet) that reads the data contract; deployable to Cloudflare Pages. Media host in `site/public/config.js` (example.com in git).
+- `site/` — reference viewer: a static site (HTML/CSS/JS modules, Leaflet) that reads the data contract; deployable to Cloudflare Pages. Media host in `site/public/config.js` (example.com in git), overridden by the gitignored `site/public/config.local.js`.
 
 The live instance's own website may live elsewhere (see the instance notes); any static site that follows the data contract can be the front end.
 
 ## Instance settings (never in git)
 - `~/.wander/config.json` (or `wander.config.json` in the repo root, or `$WANDER_CONFIG`): site URL, media host, rclone remote + bucket, Access name prefix and session lengths. Template: `wander.config.example.json`; loaded by `tripmap/config.py`.
 - `worker/wrangler.toml` (gitignored): the Worker's route, bucket and `SITE_ORIGINS`. Template: `worker/wrangler.example.toml`.
+- `site/public/config.local.js` (gitignored): the reference viewer's media host; its keys override `config.js`.
 - `~/.wander/cloudflare.env`: the Access API token.
 - `~/.wander/NOTES.md`: the instance owner's notes (their domains, trips, trip drive, deploy checks). Optional; imported here when it exists, and it wins over anything generic below:
 
@@ -22,7 +23,7 @@ The live instance's own website may live elsewhere (see the instance notes); any
 Committed files, docs, tests and commit messages use `example.com` and a made-up trip (`lisbon-2025`), never real domains, emails, paths, trip names or coordinates.
 
 ## Hard rules
-- **Privacy:** never commit media, `_tripmap/`, `overrides.json`, `clip_locations.csv`, any `trip.json`/`trips.json`, coordinates, or instance settings. `.gitignore` enforces this — don't weaken it.
+- **Privacy:** never commit media, `_tripmap/`, `overrides.json`, `clip_locations.csv`, any `trip.json`/`trips.json`, coordinates, or instance settings. `.gitignore` enforces this — don't weaken it. Its one exception is `docs/viewer-landing.png`, the README screenshot (public cover and lock badge only).
 - **Access lives in Cloudflare Zero Trust**, not in code. The Worker never decides *who* may see a trip; it only serves an allow-list of file types. Each trip = one Access app covering `<media host>/<slug>` and `<media host>/auth/<slug>`.
 - **Worker path handling:** keys are used exactly as sent; any `%`-encoding, `..` or `//` is refused so Access and the Worker can't disagree about paths. Keep it that way.
 - **Cloudflare API token** lives in `~/.wander/cloudflare.env`, read only by `tripmap/access.py`. Never read, print or commit it; never write Access changes without the owner's yes to the `--dry-run` plan.
