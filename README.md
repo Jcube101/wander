@@ -16,7 +16,7 @@ So Wander does three things:
 2. **Lets you fix what it got wrong** in a local editor: place shots on the map, move them to another day, shift times, pick the cover, hide shots.
 3. **Publishes only previews** (about 2.5 GB per thousand shots) to a private bucket, behind one Cloudflare Access app per trip. Friends get a one-time PIN by email and see only their trips.
 
-The site at wander.job-joseph.com was built with [Lovable](https://lovable.dev) (in [a separate repo](https://github.com/Jcube101/travelogue-map-memory)) on top of two small JSON files. That interface is documented, so you can [build your own site](#build-your-own-site), or start from the [reference viewer](site/).
+The live front end at wander.job-joseph.com is a separate, private project built with [Lovable](https://lovable.dev). It reads just two small JSON files, and that interface is documented: build your own site from the [data contract](SPEC.md#data-contract--build-your-own-site), or start from the [reference viewer](site/).
 
 ## How it fits together
 
