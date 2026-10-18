@@ -21,7 +21,7 @@ Size: **S** ≈ an evening, **M** ≈ a weekend, **L** ≈ several sessions. Ope
 
 ## Now
 
-Go public: tasks 1–6 are done. Task 7 (flipping the repo to public) is the maintainer's.
+Go public is done: the repo has been public since 2026-10-18.
 
 ## Initiative: Go public
 
@@ -50,14 +50,12 @@ Go public: tasks 1–6 are done. Task 7 (flipping the repo to public) is the mai
   - Prepare the GitHub description, topics and a social-preview image.
 - [x] **6. Reference viewer.** Size **L**. Depends on: 2 (config), 5. *Done: `site/` — static landing + trip pages (map with the editor's tiles and photo pins, day filter, gallery, photo/video viewer, sign-in flow), SRI-pinned Leaflet, deploys to Cloudflare Pages; helpers tested in CI; checked in a browser against a mock media host and read-only against the live one. Task 5's checks re-run afterwards: all clean.*
   A simple static viewer that reads `trips.json`/`trip.json` through the Worker and can be deployed on Cloudflare Pages, so people don't need Lovable. Reuse the local viewer's map code where it makes sense. Ends by re-running task 5's checks, so the viewer is covered too.
-- [ ] **7. Go public (the maintainer does this).** Size **S**. Depends on: 6.
+- [x] **7. Go public (the maintainer does this).** Size **S**. Depends on: 6. *Done 2026-10-18: public, with description, homepage, topics and private vulnerability reporting; CI green on the public repo; the live instance's signed-out checks (`trips.json` 200, a trip's `trip.json` 302, cover 200, CORS) and `access.py list` as expected. Still to run by hand: the dry-run publish (needs the trip drive) and an incognito sign-in.*
   Flip the visibility and confirm CI is green on the public repo. Check the live instance: a dry-run publish, `access.py list`, and the site in an incognito window.
 
 ## Next
 
-| Item | Why | Size | Depends on |
-|---|---|---|---|
-| Go public, task 7 | See above | S | Tasks 1–6 |
+Nothing queued; pick from Later.
 
 ## Later
 
