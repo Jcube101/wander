@@ -71,6 +71,7 @@ Hard-won lessons. Each one: **symptom → cause → fix/rule**. Add new ones her
 | Shell killed itself | `pkill -f <pattern>` matched its own command line | Kill by port or PID |
 | Every code change had to be made twice: in the repo and in the copy inside the trip folder on D: | The code was copied into each trip folder | Run from the repo; each trip folder only holds `Open Wander Editor.bat` |
 | Time spent "fixing" non-bugs | Reports were often misdiagnoses | Investigate and reproduce before fixing |
+| A test passed on Windows and failed in CI (`…-favourites-Alex` vs `-alex`) | Windows and macOS file systems ignore case, Linux doesn't, so `Path(...).is_dir()` matched the wrong case locally | Tests check exact names (`[p.name for p in dir.iterdir()]`); names built from emails are lowercased |
 
 ## Decisions
 
