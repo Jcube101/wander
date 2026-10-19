@@ -182,7 +182,7 @@ def main(argv=None):
     if not slug:
         sys.exit("ERROR: the trip's data has no slug. Re-run the build.")
     out = Path(args.out).expanduser().resolve() if args.out else default_out()
-    dest = out / f"{slug}-favourites-{clean(email.split('@')[0]) or 'someone'}"
+    dest = out / f"{slug}-favourites-{clean(email.split('@')[0].lower()) or 'someone'}"
     if inside(dest, root):
         sys.exit(f"ERROR: {dest} is inside the trip folder; the next Scan would add the copies to the trip. "
                  f"Pick another --out.")

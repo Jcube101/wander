@@ -168,7 +168,8 @@ class Export(unittest.TestCase):
         with mock.patch.dict(os.environ, {"WANDER_CONFIG": str(cfg)}):
             cfg.write_text(json.dumps({**data, "owner_email": "Alex@Example.com"}), encoding="utf-8")
             self.assertEqual(self.run_export(email=None), 0)
-            self.assertTrue(self.dest.is_dir())
+            # Emails ignore case, so the folder does too (exact name: some file systems don't ignore case).
+            self.assertEqual([p.name for p in self.out.iterdir()], ["lisbon-2025-favourites-alex"])
             cfg.write_text(json.dumps(data), encoding="utf-8")  # still the example's you@example.com
             self.assertEqual(self.run_export(email=None), "ERROR: owner_email in "
                              f"{cfg} is still the example (you@example.com). Put the email you sign in with there, or pass --email.")
