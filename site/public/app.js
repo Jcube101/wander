@@ -50,6 +50,33 @@ async function getJson(url, { publicFallback = false } = {}) {
   }
 }
 
+// A request to the media host that can tell "signed out" from "failed":
+// {outcome: "ok" | "signed-out" | "error", res}. When the fetch fails outright, it's either
+// offline or Access redirecting a signed-out visitor without CORS headers (which the page
+// can't read), so /me (public: the email in the Access cookie) tells the two apart.
+// cache: "no-store" by default: an <img>/<video> may have cached the same file without CORS
+// headers, and a CORS fetch handed that copy fails.
+async function mediaFetch(url, init = {}) {
+  let res;
+  try {
+    res = await fetch(url, { cache: "no-store", ...init, credentials: "include", redirect: "manual" });
+  } catch (e) {
+    if (e.name === "AbortError") throw e;
+    const signedIn = await getJson(W.joinUrl(MEDIA, "me")).then((me) => Boolean(me.email), () => true);
+    return { outcome: signedIn ? "error" : "signed-out" };
+  }
+  return { outcome: W.accessOutcome(res), res };
+}
+
+// Saves a Blob as a file (a same-origin blob: URL, so the download attribute works).
+function saveBlob(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+}
+
 // 200 = this visitor may open the trip; Access answers anything else (or a redirect the
 // browser won't follow cross-site) when they may not.
 async function canOpen(slug) {
@@ -169,22 +196,27 @@ async function tripPage(slug) {
     markers.set(x.id, m);
   }
 
-  // Days and the gallery
-  let current = items;
+  // Days and the gallery. "Favourites" is a toggle on top of the day: all of them, or one day's.
+  let current = items, day = "all", onlyFavs = false;
   const chips = $("#days");
   const days = [{ key: "all", label: "All days", sub: `${items.length} shots` },
     ...(trip.days || []).map((d) => ({ key: d.key, label: `Day ${d.n}`, sub: `${W.fmtDay(d.key)} · ${d.count}` }))];
   const chip = (d) =>
     `<button class="chip" data-day="${esc(d.key)}" aria-pressed="false">${esc(d.label)}<small>${esc(d.sub)}</small></button>`;
   chips.innerHTML = chip(days[0]) +
-    `<button class="chip fav-chip" data-day="favs" aria-pressed="false" hidden>${HEART}<span id="fav-label"></span><small>Only you see these</small></button>` +
+    `<button class="chip fav-chip" data-favs aria-pressed="false" hidden>${HEART}<span id="fav-label"></span><small>Only you see these</small></button>` +
     days.slice(1).map(chip).join("");
+  const favChip = chips.querySelector("[data-favs]");
   chips.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-day]");
-    if (b) setDay(b.dataset.day);
+    const b = e.target.closest("[data-day], [data-favs]");
+    if (!b) return;
+    if (b.hasAttribute("data-favs")) onlyFavs = !onlyFavs;
+    else day = b.dataset.day;
+    setView();
   });
   const grid = $("#grid");
   grid.addEventListener("click", (e) => {
+    if (e.target.closest("#zip-btn")) return zipStart();
     const h = e.target.closest("[data-fav]");
     if (h) return toggleFav(h.dataset.fav);
     const b = e.target.closest("[data-id]");
@@ -203,12 +235,19 @@ async function tripPage(slug) {
     </div>`;
   }
 
-  function setDay(day) {
-    current = day === "favs" ? W.favoriteItems(items, favs || new Set()) : W.itemsFor(items, day);
+  function setView() {
+    const inDay = W.itemsFor(items, day);
+    current = onlyFavs ? W.favoriteItems(inDay, favs || new Set()) : inDay;
     for (const b of chips.querySelectorAll("[data-day]")) b.setAttribute("aria-pressed", String(b.dataset.day === day));
-    grid.innerHTML = current.map(tile).join("") || (day === "favs"
-      ? '<p class="muted">No favourites yet. Tap the ♡ on a photo or video to add it. Only you see yours.</p>'
-      : '<p class="muted">Nothing on this day.</p>');
+    favChip.setAttribute("aria-pressed", String(onlyFavs));
+    const empty = !onlyFavs ? "Nothing on this day."
+      : day === "all" ? "No favourites yet. Tap the ♡ on a photo or video to add it. Only you see yours."
+      : "No favourites on this day.";
+    grid.innerHTML = current.length
+      ? (onlyFavs ? '<div class="fav-tools zip-only"><span id="zip-sum"></span><button class="btn ghost" id="zip-btn">Download favourites (ZIP)</button></div>' : "")
+        + current.map(tile).join("")
+      : `<p class="muted">${esc(empty)}</p>`;
+    zipSummary();
     grid.scrollTop = 0;
     cluster.clearLayers();
     const placed = current.filter((x) => markers.has(x.id));
@@ -216,7 +255,7 @@ async function tripPage(slug) {
     if (placed.length) map.fitBounds(L.latLngBounds(placed.map((x) => [x.lat, x.lon])).pad(0.15), { maxZoom: 15 });
     else map.setView([20, 0], 2);
   }
-  setDay("all");
+  setView();
 
   // Favourites: hearts on tiles and in the viewer, and the "Favourites (n)" filter.
   // In that filter, un-hearting keeps the tile until the filter is picked again,
@@ -225,29 +264,22 @@ async function tripPage(slug) {
   lbFav.innerHTML = HEART;
   lbFav.onclick = () => toggleFav(lbFav.dataset.fav);
   function renderFavs() {
-    chips.querySelector('[data-day="favs"]').hidden = !favs;
+    favChip.hidden = !favs;
     if (!favs) return;
     $("#fav-label").textContent = W.favoritesLabel(favs.size);
     for (const h of document.querySelectorAll("[data-fav]")) {
       h.hidden = false;
       h.setAttribute("aria-pressed", String(favs.has(h.dataset.fav)));
     }
+    zipSummary();
   }
-  // A favourites request: {outcome: "ok" | "signed-out" | "error", data}. A fetch that fails
-  // outright is either offline or Access sending a signed-out visitor to its login (a
-  // cross-site redirect without CORS headers, which the page can't read), so /me (public:
-  // the email in the Access cookie) tells the two apart.
+  // A favourites request: {outcome: "ok" | "signed-out" | "error", data}.
   async function favRequest(init = {}) {
-    let r;
-    try {
-      r = await fetch(favUrl, { ...init, credentials: "include", redirect: "manual" });
-    } catch {
-      const signedIn = await getJson(W.joinUrl(MEDIA, "me")).then((me) => Boolean(me.email), () => true);
-      return { outcome: signedIn ? "error" : "signed-out" };
-    }
-    const outcome = W.favoritesOutcome(r);
-    return { outcome, data: outcome === "ok" ? await r.json() : null };
+    const { outcome, res } = await mediaFetch(favUrl, init);
+    return { outcome, data: outcome === "ok" ? await res.json() : null };
   }
+  const signInAgain = (what) =>
+    notice(`Your sign-in has run out, so ${what}. <a href="${esc(W.signInUrl(MEDIA, slug, location.href))}">Sign in again</a>`);
   function toggleFav(id) {
     if (!favs || !id) return;
     const fav = !favs.has(id);
@@ -266,7 +298,7 @@ async function tripPage(slug) {
       favsSending--;
       favs = W.withFavorite(favs, id, !fav);
       if (e.outcome === "signed-out") {
-        notice(`Your sign-in has run out, so favourites can't be saved. <a href="${esc(W.signInUrl(MEDIA, slug, location.href))}">Sign in again</a>`);
+        signInAgain("favourites can't be saved");
       } else {
         notice("Couldn't save that favourite. Check your connection and try again.", 6000);
       }
@@ -303,6 +335,11 @@ async function tripPage(slug) {
     lbFav.dataset.fav = x.id;
     lbFav.hidden = !favs;
     lbFav.setAttribute("aria-pressed", String(Boolean(favs?.has(x.id))));
+    const dl = W.downloadUrl(MEDIA, slug, x);
+    lbDl.hidden = !dl;
+    lbDl.href = dl || "#";
+    shared = null;
+    dlState("");
     for (const t of grid.querySelectorAll(".tile.cur")) t.classList.remove("cur");
     grid.querySelector(`[data-id="${CSS.escape(x.id)}"]`)?.classList.add("cur");
   }
@@ -310,6 +347,192 @@ async function tripPage(slug) {
     lb.hidden = true;
     stage.innerHTML = ""; // stops a playing video
     document.body.style.overflow = "";
+    shared = null;
+  }
+
+  // Download one shot. Desktop: the link itself (?download=1 → the Worker says "attachment").
+  // Phones: the share sheet, so it can go straight into Photos. The file has to be fetched
+  // first; if the browser then says the tap is too old for a share (iOS does, for a big
+  // video), the button turns into "Save" and the next tap shares it at once.
+  const lbDl = $("#lb-dl");
+  let shared = null; // {id, file} fetched for the share sheet
+  const prefersShare = () => matchMedia("(pointer: coarse)").matches && typeof navigator.canShare === "function";
+  function dlState(state) {
+    lbDl.dataset.state = state;
+    lbDl.querySelector("span").textContent = state === "busy" ? "Preparing…" : state === "ready" ? "Save" : "Download";
+  }
+  lbDl.onclick = (e) => {
+    if (!prefersShare()) return; // the link downloads it
+    e.preventDefault();
+    if (lbDl.dataset.state !== "busy") shareShot(list[idx]);
+  };
+  async function shareShot(x) {
+    if (shared?.id === x.id) return share(shared.file);
+    dlState("busy");
+    let file;
+    try {
+      const { outcome, res } = await mediaFetch(url(W.downloadPath(x)));
+      if (outcome === "signed-out") {
+        signInAgain("the file can't be downloaded");
+        return dlState("");
+      }
+      if (outcome !== "ok") throw new Error(`HTTP ${res?.status}`);
+      const blob = await res.blob();
+      const name = W.downloadName(x, tz);
+      file = new File([blob], name, { type: blob.type || (name.endsWith(".mp4") ? "video/mp4" : "image/jpeg") });
+    } catch {
+      notice("Couldn't download that file. Check your connection and try again.", 6000);
+      return dlState("");
+    }
+    if (lb.hidden || list[idx] !== x) return; // they've moved on
+    if (!navigator.canShare({ files: [file] })) {
+      saveBlob(file, file.name); // no share sheet for this file: an ordinary download
+      return dlState("");
+    }
+    shared = { id: x.id, file };
+    return share(file);
+  }
+  async function share(file) {
+    try {
+      await navigator.share({ files: [file] });
+      dlState("");
+    } catch (e) {
+      if (e.name === "NotAllowedError") return dlState("ready"); // needs a fresh tap
+      dlState(""); // AbortError: they closed the sheet; a tap opens it again
+      if (e.name !== "AbortError") notice("Couldn't open the share sheet. Try again.", 6000);
+    }
+  }
+
+  // "Download favourites (ZIP)": desktop only (CSS hides it on touch and narrow screens). The
+  // favourites in view (all, or one day's), one file at a time, each streamed in and checked
+  // (CRC-32) as it arrives, then stored uncompressed in a ZIP built here. A file that fails is
+  // skipped and listed at the end. At most W.ZIP_MAX bytes: more → pick a day.
+  const zipDlg = $("#zip"), zipBody = $("#zip-body"), zipActions = $("#zip-actions");
+  let zipRun = null, zipPicked = [], zipEst = null; // zipRun = {ctrl} while downloading
+  function zipItems() {
+    return current.filter((x) => favs?.has(x.id) && W.downloadPath(x));
+  }
+  function scopeText() {
+    const d = (trip.days || []).find((d) => d.key === day);
+    return d ? ` from Day ${d.n}` : "";
+  }
+  function zipSummary() {
+    const sum = $("#zip-sum");
+    if (!sum) return;
+    const est = W.zipEstimate(zipItems());
+    sum.textContent = `${est.files} favourite${est.files === 1 ? "" : "s"}${est.bytes ? ` · about ${W.fmtBytes(est.bytes)}` : ""}`;
+  }
+  function zipShow(html, actions) {
+    zipBody.innerHTML = html;
+    zipActions.innerHTML = actions.map(([id, label, primary]) =>
+      `<button class="btn${primary ? "" : " ghost"}" data-zip="${id}">${esc(label)}</button>`).join("");
+    if (!zipDlg.open) zipDlg.showModal();
+    zipActions.querySelector(".btn:not(.ghost)")?.focus();
+  }
+  function zipStart() {
+    if (!W.isDesktop(matchMedia) || zipRun) return;
+    const picked = zipItems();
+    const est = W.zipEstimate(picked);
+    if (!est.files) return;
+    const size = est.bytes ? `about ${W.fmtBytes(est.bytes)}` : "size unknown";
+    const unknown = est.unknown && est.bytes ? ` (not counting ${est.unknown} whose size isn't known)` : "";
+    if (est.bytes > W.ZIP_MAX) {
+      return zipShow(`<p>Your ${est.files} favourites${esc(scopeText())} come to ${esc(W.fmtBytes(est.bytes))}, more than one ZIP can hold (${esc(W.fmtBytes(W.ZIP_MAX))}).</p>
+        <p>Pick a day above, then download that day's favourites. Do it again for the other days.</p>`, [["close", "OK", true]]);
+    }
+    zipShow(`<p>Download ${est.files} favourite${est.files === 1 ? "" : "s"}${esc(scopeText())} as one ZIP file: ${esc(size)}${esc(unknown)}.</p>
+      <p class="muted">The photos and videos as shown here (not the camera originals). Keep this page open until it's done.</p>`,
+      [["cancel", "Cancel"], ["go", "Download", true]]);
+    zipPicked = picked;
+    zipEst = est;
+  }
+  zipActions.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-zip]");
+    if (!b) return;
+    if (b.dataset.zip === "go") zipBuild(zipPicked, zipEst);
+    else if (b.dataset.zip === "stop") zipRun?.ctrl.abort();
+    else zipDlg.close();
+  });
+  zipDlg.addEventListener("cancel", (e) => { // Escape
+    if (zipRun) {
+      e.preventDefault();
+      zipRun.ctrl.abort();
+    }
+  });
+  zipDlg.addEventListener("close", () => {
+    zipBody.innerHTML = "";
+    if (zipDlg.dataset.href) URL.revokeObjectURL(zipDlg.dataset.href);
+    delete zipDlg.dataset.href;
+  });
+  const leaveWarning = (e) => e.preventDefault();
+
+  async function zipBuild(picked, est) {
+    const ctrl = new AbortController();
+    zipRun = { ctrl };
+    addEventListener("beforeunload", leaveWarning);
+    const zip = W.zipWriter(), used = new Set(), failed = [];
+    let got = 0, n = 0, stop = null;
+    zipShow(`<p id="zip-status"></p><progress id="zip-bar" max="1" value="0"></progress>`, [["stop", "Cancel"]]);
+    const status = $("#zip-status"), bar = $("#zip-bar");
+    const progress = () => {
+      status.textContent = `Downloading ${n} of ${picked.length} · ${W.fmtBytes(got)}${est.bytes ? ` of about ${W.fmtBytes(est.bytes)}` : ""}`;
+      if (est.bytes && !est.unknown) bar.value = Math.min(1, got / est.bytes);
+      else bar.value = (n - 1) / picked.length;
+    };
+    try {
+      for (const x of picked) {
+        n++;
+        progress();
+        const name = W.uniqueName(W.downloadName(x, tz), used);
+        try {
+          const { outcome, res } = await mediaFetch(url(W.downloadPath(x)), { signal: ctrl.signal });
+          if (outcome === "signed-out") { stop = "signed-out"; break; }
+          if (outcome !== "ok") throw new Error(res ? `HTTP ${res.status}` : "no connection");
+          const reader = res.body.getReader(), chunks = [];
+          let crc = 0, size = 0;
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            crc = W.crc32(value, crc);
+            size += value.byteLength;
+            got += value.byteLength;
+            chunks.push(value);
+            if (zip.size + size > W.ZIP_MAX) { stop = "too-big"; await reader.cancel(); break; }
+            progress();
+          }
+          if (stop) break;
+          // As a Blob, the browser can keep it off the page's memory (on disk if need be).
+          zip.add(name, [new Blob(chunks)], { crc, size, t: x.t, tzOffsetMin: tz });
+        } catch (e) {
+          if (ctrl.signal.aborted) throw e;
+          failed.push(`${name} (${e.message || "failed"})`);
+        }
+      }
+    } catch {
+      zipRun = null;
+      removeEventListener("beforeunload", leaveWarning);
+      return zipShow("<p>Cancelled. Nothing was saved.</p>", [["close", "Close", true]]);
+    }
+    zipRun = null;
+    removeEventListener("beforeunload", leaveWarning);
+    if (stop === "signed-out") {
+      zipDlg.close();
+      return signInAgain("the ZIP couldn't be finished");
+    }
+    if (stop === "too-big") {
+      return zipShow(`<p>These favourites came to more than ${esc(W.fmtBytes(W.ZIP_MAX))}, more than one ZIP can hold. Nothing was saved.</p>
+        <p>Pick a day above, then download that day's favourites.</p>`, [["close", "OK", true]]);
+    }
+    const list = failed.length
+      ? `<p>Couldn't download ${failed.length} file${failed.length === 1 ? "" : "s"}; ${zip.count ? "the ZIP has the rest" : "nothing to save"}:</p><ul class="zip-failed">${failed.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>`
+      : "";
+    if (!zip.count) return zipShow(list || "<p>Nothing to save.</p>", [["close", "Close", true]]);
+    const name = `${slug}-favourites.zip`;
+    const href = URL.createObjectURL(new Blob(zip.finish(), { type: "application/zip" }));
+    zipDlg.dataset.href = href;
+    zipShow(`<p>Done: ${zip.count} file${zip.count === 1 ? "" : "s"}, ${esc(W.fmtBytes(zip.size))}, saved as <b>${esc(name)}</b>.</p>${list}
+      <p><a class="btn" id="zip-save" href="${esc(href)}" download="${esc(name)}">Save ZIP</a></p>`, [["close", "Close", true]]);
+    $("#zip-save").click(); // the browser's own download; the button is there if it was blocked
   }
   $("#lb-close").onclick = closeLb;
   $("#lb-prev").onclick = () => { idx = W.step(idx, list.length, -1); show(); };

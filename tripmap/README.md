@@ -76,6 +76,10 @@ The toolbar under the map has the filters on the left; on the right, the save st
 
 Add `--dry-run` to see the plan without changing anything. Only files `trip.json` references are uploaded, so `trip.js` and `index.html` (local editor files; `trip.js` holds folder paths) and archived shots never leave the disk. Data format: `SPEC.md` → Data contract.
 
+## Originals for someone
+
+Originals never go online. Whoever wants some hearts them on the site; then `python tripmap/export_favs.py "<trip folder>" --email friend@example.com` (yours: leave out `--email`; it uses `owner_email` in your config) reads their favourites from R2, shows the count and size, asks y/N and copies the originals (full-res photos, full camera clips, never `.LRF` proxies) into `Downloads/<slug>-favourites-<name>/`, named `<date>_<time>_<original name>`. `--dry-run` lists only; `--out` puts the folder elsewhere. It never changes anything on R2 or in the trip folder. More: RUNBOOK.md → Originals for someone.
+
 ## Size
 
 The build prints the bundle size (about 2.5 GB for ~1,000 shots). R2's free tier is 10 GB. To shrink it, delete `_tripmap/media/*.mp4` and rebuild with `--crf 30` or `--video-height 540`.

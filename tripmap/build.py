@@ -658,6 +658,10 @@ def main():
                     y["ar"] = round(im.width / im.height, 3)
             except Exception:  # noqa: BLE001
                 pass
+        # Size of what a site downloads (the full preview, else the card), so it can
+        # estimate a ZIP before fetching anything.
+        dl = media if media.exists() else card if card.exists() else None
+        y["bytes"] = dl.stat().st_size if dl else None
         clean.append(y)
 
     def pick_cover(cands):
@@ -701,7 +705,8 @@ def main():
     shutil.copyfile(HERE / "viewer.html", out / "index.html")
 
     # Public data for the website (no local folder paths or camera details)
-    PUBLIC = ("id", "type", "t", "day", "lat", "lon", "loc", "conf", "dur", "orig", "thumb", "card", "ar", "media")
+    PUBLIC = ("id", "type", "t", "day", "lat", "lon", "loc", "conf", "dur", "orig", "thumb", "card", "ar", "media",
+              "bytes")
     # Archived shots are left out entirely; day numbers and trip dates still come
     # from every shot, so archiving never renumbers days.
     pub_items = [{k: y[k] for k in PUBLIC if y.get(k) is not None} for y in clean if not y.get("archived")]

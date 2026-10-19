@@ -39,6 +39,7 @@ Worker (e.g. "wander-media") on media.example.com
   /trips.json, /public/*     public; CORS with credentials for SITE_ORIGINS, "*" without for anyone else
   /<slug>/...                behind Cloudflare Access app for that trip
   /<slug>/favorites          the same app; GET/POST this visitor's own favourites (Access token verified)
+  /<slug>/cards|media/…?download=1   the same file as a download named <date>_<time>_<original name>
   /auth/<slug>?return=URL    behind the same Access app; 302s back to a SITE_ORIGINS origin only
   /me                        email from the Access cookie (display only)
         ▲
@@ -56,11 +57,12 @@ wander.example.com  — any static site (the live example is built with Lovable)
 | **tripmap editor** (`serve.py` + `viewer.html`) | `127.0.0.1:8765`, started by the trip folder's launcher | Reads/writes `overrides.json`; runs build/publish |
 | **launcher** (`launcher.py`) | The owner's machine | Writes the trip folder's `.bat`/`.sh` launcher with this repo's path |
 | **tripmap publish** (`publish.py`) | The owner's machine | `_tripmap/` → R2 via rclone |
+| **export favourites** (`export_favs.py`) | The owner's machine | One person's favourites (read from R2) → their originals, copied into a local folder for the owner to hand over |
 | **R2 bucket** | Cloudflare, private, no public domain | Layout in the diagram above |
 | **Worker** (`worker/`) | The media host | Serves an allow-list of R2 keys and each visitor's favourites; settings in `wrangler.toml` (`SITE_ORIGINS`; for favourites `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` and the secret `FAVS_SALT`) |
 | **Cloudflare Access** | Zero Trust, in front of the Worker | Decides who sees which trip |
 | **Site** | The site host, same registrable domain as the media host | Consumes the [data contract](#data-contract--build-your-own-site) |
-| **Reference viewer** (`site/public/`) | Any static host, e.g. Cloudflare Pages | One such site: trip list with lock badges; per trip a map, day filter, gallery, viewer, favourites (hearts + a "Favourites (n)" filter) and sign-in. Media host set in `config.js`, overridden by a gitignored `config.local.js`; no build step, no browser storage |
+| **Reference viewer** (`site/public/`) | Any static host, e.g. Cloudflare Pages | One such site: trip list with lock badges; per trip a map, day filter, gallery, viewer, favourites (hearts + a "Favourites (n)" filter), downloads (one shot; on desktop, favourites as a ZIP) and sign-in. Media host set in `config.js`, overridden by a gitignored `config.local.js`; no build step, no browser storage |
 
 ## Functional requirements
 
@@ -220,6 +222,7 @@ Never deleted: anything outside `<slug>/thumbs/`, `<slug>/cards/` and `<slug>/me
 | Allow-list | `trips.json`; `public/…`; `<slug>/trip.json`, `<slug>/thumbs|cards/<id>.jpg`, `<slug>/media/<id>.jpg|mp4`. Everything else 404; never lists. `favs/…` is always 404 (checked before the allow-list) |
 | `/auth/<slug>?return=`, `/me` | See [Worker endpoints](#worker-endpoints). `/me` reads the `CF_Authorization` cookie (null if missing/expired) |
 | `/<slug>/favorites` | See [Favourites](#favourites). Identity only from the `Cf-Access-Jwt-Assertion` header Access adds: RS256, signed by a key from `<ACCESS_TEAM_DOMAIN>/cdn-cgi/access/certs` (cached 1 h; refetched at most once a minute for an unknown key id), `iss` = `ACCESS_TEAM_DOMAIN`, `aud` contains `ACCESS_AUD[<slug>]`, not expired, has `email`. Never the cookie, never anything the page sends. POST needs an `Origin` in `SITE_ORIGINS` (CSRF). Stored at `favs/<slug>/<sha256(FAVS_SALT + lowercase email)>.json` as `{"version":1,"ids":[…],"updated":…}`; no email in R2 or logs. A trip's item ids are read from its `trip.json` and cached 60 s per isolate. Read-modify-write, last write wins; removing the last favourite deletes the file. Missing settings for a trip → 500 |
+| Downloads | `?download=1` on `<slug>/cards/<id>.jpg` or `<slug>/media/<id>.jpg|mp4` (not thumbnails, not public files) adds `Content-Disposition: attachment; filename="…"` named as in [Downloads](#downloads); the rest of the response is unchanged (Range, 304, caching). Exactly `download=1`; any other value or parameter changes nothing. The name comes from the trip's `trip.json` (`orig`, `t`, `tzOffsetMin`; the same 60 s cache); an id not in it (archived since) or an unreadable `trip.json` gives `<id>.<ext>` |
 | Range | 206 with `content-range`, incl. suffix ranges |
 | Conditional | `If-None-Match` etc. → 304 |
 | Caching | Public: data `no-cache`, images 1 h. Protected: `private`, data `no-cache`, media 1 week |
@@ -256,6 +259,20 @@ Manages the above through the Cloudflare API, so onboarding needs no dashboard c
 | Token handling | Sent only in the `Authorization` header; never printed, logged or committed (API error text is scrubbed too). Claude Code never reads the file |
 | Emails | May appear in terminal output; never in the repo, docs, test fixtures (use `@example.com`) or commit messages |
 
+### Export favourites (`tripmap/export_favs.py`)
+
+Originals never go online (D1). Someone who wants originals hearts them on the site; the owner copies those originals into a folder and hands it over however they like.
+
+| Rule | Behaviour |
+|---|---|
+| Whose | `--email`, else `owner_email` in the config (refused while it's the example's `you@example.com`). Their file is `favs/<slug>/<sha256(salt + lowercase email)>.json`, named as the Worker names it; the salt comes from `~/.wander/favs-salt` and is never printed |
+| Read-only | One `rclone cat` of that file (with `--s3-no-check-bucket`); nothing is ever written to R2 or the trip folder |
+| Which files | Ids → the trip's local `_tripmap/trip.js` (`rel`) → the originals: full-resolution photos, full camera MP4s, never `.LRF` proxies. Archived shots, ids not in the trip and missing originals are skipped with a warning |
+| Where | `<out>/<slug>-favourites-<name part of the email>/`; `--out` defaults to the Downloads folder. Refused inside the trip folder (the next Scan would add the copies) or the repo |
+| Names | As [Downloads](#downloads), with the original's extension (lowercase); clashes get `_2`, `_3` |
+| Confirm | Prints the count, total size and destination, checks free space, then asks y/N. `--dry-run` lists every file and copies nothing |
+| Safe to rerun | Each file is copied to `<name>.part`, then renamed; a file already there at the same size is skipped, one with another size is left alone (warning) |
+
 ## Data contract — build your own site
 
 A Wander site is any front end that reads two JSON files from the media host: `trips.json` for the landing page and `<slug>/trip.json` for each trip. That's the whole interface between `tripmap/` (producer) and the site (consumer); the live example was built with Lovable from this section alone. Changing a field means updating this section (and the site).
@@ -266,6 +283,7 @@ What a site needs to do:
 3. Show items on a map (`lat`/`lon`), by day (`days`, `day`), in time order (`t`), with `thumb`/`card`/`media` as image and video sources.
 4. Follow the [client rules](#client-rules) and host the site on the same registrable domain as the media host, with its origin in the Worker's `SITE_ORIGINS`.
 5. Optional: let each visitor keep their own [favourites](#favourites) (a heart per item, a filter).
+6. Optional: let visitors [download](#downloads) a shot, or their favourites as one ZIP.
 
 Base: `https://<media host>`, e.g. `https://media.example.com`. All paths below are relative to it unless noted.
 
@@ -304,7 +322,8 @@ Sorted newest trip first. `cover` ≤640px, `coverImage` 1600px (falls back to `
     "conf": "high|medium|low",
     "dur": 12.0, "orig": "DJI_2025...MP4",
     "thumb": "thumbs/<id>.jpg", "card": "cards/<id>.jpg", "ar": 1.778,
-    "media": "media/<id>.jpg|mp4"
+    "media": "media/<id>.jpg|mp4",
+    "bytes": 245113
   }]
 }
 ```
@@ -312,11 +331,13 @@ Sorted newest trip first. `cover` ≤640px, `coverImage` 1600px (falls back to `
 - `lat`/`lon` may be absent (unplaced shot). `loc` is an internal *source code*, never a place name — don't display it. `cleared` = deliberately unplaced (no `lat`/`lon`).
 - `t` is unix seconds; show times using `tzOffsetMin` (the trip's zone), never the viewer's.
 - `day`/`dayN` are computed in the trip zone; `days[].n` counts from the first day (gaps keep their numbers).
+- `bytes` (optional): size of the item's download file (`media`, else `card`), so a site can estimate a ZIP before fetching anything. Trips built before it was added (October 2026) don't have it until they're rebuilt and published again.
 
 ### Worker endpoints
 - `GET /me` → `{ "email": string|null }` (from the Access cookie; display only).
 - `GET /auth/<slug>?return=<url>` → behind the trip's Access app; 302 to `return` if its origin is exactly one of `SITE_ORIGINS` (https), else to `<first site origin>/<slug>`. The site adds `?signedin=1` to `return` to know the visitor just signed in.
 - `GET|POST /<slug>/favorites` → this visitor's favourites in the trip ([Favourites](#favourites)).
+- `GET /<slug>/cards|media/<file>?download=1` → the same file as an attachment with a readable name ([Downloads](#downloads)).
 - Logout: `/cdn-cgi/access/logout` (Cloudflare).
 
 ### Favourites
@@ -352,17 +373,38 @@ No other headers. The `Origin` must be in the Worker's `SITE_ORIGINS` (browsers 
 
 Show changes at once and undo them if the request fails. Send one POST at a time per visitor (queue taps), since each POST rewrites the visitor's whole list.
 
+### Downloads
+Visitors can save what they see: an item's **download file** is `media` (the full preview), else `card`; never `thumb`. Originals are never online ([Export favourites](#export-favourites-tripmapexport_favspy) is how someone gets them).
+
+**Name:** `<YYYY-MM-DD_HHMM>_<original name>.<ext>`, e.g. `2025-05-02_1530_IMG_1234.jpg`:
+- the date and time are `t` in the trip's zone (`tzOffsetMin`), to the minute;
+- `<original name>` is `orig` without its extension: accents dropped (Unicode NFKD, then U+0300–U+036F removed), every run of characters other than `A–Z a–z 0–9 . _ -` replaced by `_`, `. _ -` trimmed from both ends, at most 80 characters (trimmed again). Nothing left → the item's `id`;
+- `<ext>` is the downloaded file's (`jpg` or `mp4`; a video's card is a `jpg`). No `t` → no date prefix.
+
+The Worker, the reference viewer and `export_favs.py` all use this rule; `worker/test/download-names.json` holds the cases all three are tested against.
+
+**One shot:** link to the file with `?download=1`, e.g. `https://media.example.com/lisbon-2025/media/<id>.jpg?download=1`. The Worker answers with `Content-Disposition: attachment` and the name above, so the browser saves it and the page stays (the `download` attribute does nothing across origins). On phones, the share sheet is better (it can save to Photos): fetch the file, wrap it in a `File` with the name above, `navigator.canShare({files})` → `navigator.share({files})`. If that throws `NotAllowedError` (the tap was too long ago by the time the file arrived), let the next tap call `share` with the file already in hand.
+
+**Fetching files from the page** (for sharing or a ZIP):
+```js
+fetch(`${MEDIA}/${slug}/${x.media}`, { credentials: "include", cache: "no-store", redirect: "manual" })
+```
+`cache: "no-store"`, because the gallery's `<img>`/`<video>` may already have cached that URL without CORS headers, and the browser would hand that copy to the fetch, which then fails. Classify the response as for favourites (`opaqueredirect` or 401 = signed out).
+
+**Several at once (ZIP):** the reference viewer zips the favourites in view (all, or one day's), on desktop only: it shows the count and the estimated size (sum of `bytes`) first and asks; over 500 MB it says to pick a day instead. It fetches one file at a time, checks each (CRC-32) as it streams in, stores it uncompressed (photos and videos don't compress) and saves `<slug>-favourites.zip`. Cancel stops it; files that fail are skipped and listed at the end; a lapsed sign-in stops it with the sign-in link.
+
 ### Client rules
 - `fetch(..., { credentials: 'include' })` for everything on the media host.
 - No `crossorigin` attribute on `<img>`/`<video>` (it would drop the cookie).
 - Never persist trip data in browser storage (favourites included: keep them in memory, the Worker has them).
 - Writes (favourites) are simple requests: `text/plain` body, no custom headers.
+- Fetching a media file with `fetch` (downloads): add `cache: "no-store"` ([Downloads](#downloads)).
 
 ## Non-functional requirements
 
 | Requirement | How it's kept |
 |---|---|
-| Originals never leave the disk | Only previews are built and uploaded |
+| Originals never leave the disk | Only previews are built and uploaded; `export_favs.py` copies originals into a local folder, nowhere else |
 | Raw paths never uploaded | `publish.py` excludes `trip.js`/`index.html`; Worker refuses them |
 | No database, ever | Identity = Access cookie; data = static JSON in R2 (favourites too: one small file per person per trip) |
 | Favourites stay private | One file per person per trip, named by a salted hash of their email (salt = Worker secret); no email stored or logged; never served as a file; only the owner's verified token reads or writes it |
@@ -376,7 +418,7 @@ Show changes at once and undo them if the request fails. Send one POST at a time
 ## Non-goals
 
 - Public sharing of originals
-- Serving originals online, even to the crew. Originals never leave the disk; anyone who wants one asks the owner.
+- Serving originals online, even to the crew. Originals never leave the disk; anyone who wants some hearts them, and the owner exports and hands them over (`export_favs.py`).
 - In-browser editing on the live site (favourites are each visitor's own bookmarks, not edits to the trip)
 - Shared or public favourites (v1: nobody sees anyone else's)
 - A user database or our own auth

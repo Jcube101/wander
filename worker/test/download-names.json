@@ -1,0 +1,149 @@
+{
+  "about": "How a downloaded or exported file is named (SPEC.md, Downloads). The Worker (worker/test), the reference viewer (site/test) and tripmap/export_favs.py (tripmap/tests) must all give these names.",
+  "cases": [
+    {
+      "why": "photo, previewed as jpg",
+      "id": "010101010101",
+      "orig": "IMG_1234.HEIC",
+      "t": 1746196200,
+      "tzOffsetMin": 60,
+      "ext": "jpg",
+      "name": "2025-05-02_1530_IMG_1234.jpg"
+    },
+    {
+      "why": "video, past midnight in the trip zone",
+      "id": "020202020202",
+      "orig": "DJI_20250502234500_0001_D.MP4",
+      "t": 1746229530,
+      "tzOffsetMin": 60,
+      "ext": "mp4",
+      "name": "2025-05-03_0045_DJI_20250502234500_0001_D.mp4"
+    },
+    {
+      "why": "zone behind UTC, seconds dropped",
+      "id": "030303030303",
+      "orig": "PXL_20250501_213000123.jpg",
+      "t": 1746153059,
+      "tzOffsetMin": -300,
+      "ext": "jpg",
+      "name": "2025-05-01_2130_PXL_20250501_213000123.jpg"
+    },
+    {
+      "why": "half-hour zone",
+      "id": "040404040404",
+      "orig": "IMG_2000.jpg",
+      "t": 1746196200,
+      "tzOffsetMin": 330,
+      "ext": "jpg",
+      "name": "2025-05-02_2000_IMG_2000.jpg"
+    },
+    {
+      "why": "a video card is a jpg",
+      "id": "050505050505",
+      "orig": "clip.mov",
+      "t": 1746196200,
+      "tzOffsetMin": 0,
+      "ext": "jpg",
+      "name": "2025-05-02_1430_clip.jpg"
+    },
+    {
+      "why": "accents dropped, spaces and brackets become _",
+      "id": "060606060606",
+      "orig": "Café à Lisboa (2).JPG",
+      "t": 1746196200,
+      "tzOffsetMin": 60,
+      "ext": "jpg",
+      "name": "2025-05-02_1530_Cafe_a_Lisboa_2.jpg"
+    },
+    {
+      "why": "path and quote characters",
+      "id": "070707070707",
+      "orig": "../../etc/pa\"ss;wd.jpg",
+      "t": 1746196200,
+      "tzOffsetMin": 60,
+      "ext": "jpg",
+      "name": "2025-05-02_1530_etc_pa_ss_wd.jpg"
+    },
+    {
+      "why": "line breaks can not reach the header",
+      "id": "080808080808",
+      "orig": "evil\r\nSet-Cookie: x=1.jpg",
+      "t": 1746196200,
+      "tzOffsetMin": 60,
+      "ext": "jpg",
+      "name": "2025-05-02_1530_evil_Set-Cookie_x_1.jpg"
+    },
+    {
+      "why": "nothing usable: the id",
+      "id": "090909090909",
+      "orig": "★★★.jpg",
+      "t": 1746196200,
+      "tzOffsetMin": 60,
+      "ext": "jpg",
+      "name": "2025-05-02_1530_090909090909.jpg"
+    },
+    {
+      "why": "other scripts dropped",
+      "id": "0a0a0a0a0a0a",
+      "orig": "ทะเล_beach.jpg",
+      "t": 1746196200,
+      "tzOffsetMin": 60,
+      "ext": "jpg",
+      "name": "2025-05-02_1530_beach.jpg"
+    },
+    {
+      "why": "full-width letters",
+      "id": "0b0b0b0b0b0b",
+      "orig": "ＩＭＧ１.jpg",
+      "t": 1746196200,
+      "tzOffsetMin": 60,
+      "ext": "jpg",
+      "name": "2025-05-02_1530_IMG1.jpg"
+    },
+    {
+      "why": "leading dot, no extension",
+      "id": "0c0c0c0c0c0c",
+      "orig": ".hidden",
+      "t": 1746196200,
+      "tzOffsetMin": 60,
+      "ext": "jpg",
+      "name": "2025-05-02_1530_hidden.jpg"
+    },
+    {
+      "why": "only the last extension goes",
+      "id": "0d0d0d0d0d0d",
+      "orig": "IMG_1234.edited.HEIC",
+      "t": 1746196200,
+      "tzOffsetMin": 60,
+      "ext": "jpg",
+      "name": "2025-05-02_1530_IMG_1234.edited.jpg"
+    },
+    {
+      "why": "at most 80 characters, trimmed again",
+      "id": "0e0e0e0e0e0e",
+      "orig": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_bbbbbbbbbbbbbbbbbbbb.jpg",
+      "t": 1746196200,
+      "tzOffsetMin": 60,
+      "ext": "jpg",
+      "name": "2025-05-02_1530_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg"
+    },
+    {
+      "why": "no original name: the id",
+      "id": "0f0f0f0f0f0f",
+      "orig": null,
+      "t": 1746196200,
+      "tzOffsetMin": 60,
+      "ext": "jpg",
+      "name": "2025-05-02_1530_0f0f0f0f0f0f.jpg"
+    },
+    {
+      "why": "no time: no prefix",
+      "id": "101010101010",
+      "orig": "IMG_1.jpg",
+      "t": null,
+      "tzOffsetMin": 60,
+      "ext": "jpg",
+      "name": "IMG_1.jpg"
+    }
+  ]
+}

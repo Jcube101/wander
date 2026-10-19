@@ -46,11 +46,11 @@ flowchart LR
   F -- "email one-time PIN" --> A
 ```
 
-- **Originals** stay on your disk. `build.py` reads them (never changes them) and writes `_tripmap/` next to them: thumbnails, 640 px cards, 1600 px photos, 720p videos and the map data.
+- **Originals** stay on your disk. `build.py` reads them (never changes them) and writes `_tripmap/` next to them: thumbnails, 640 px cards, 1600 px photos, 720p videos and the map data. When a friend wants originals, they heart them on the site and `export_favs.py` copies exactly those into a folder for you to hand over.
 - **The editor** (`serve.py` + `viewer.html`) runs only on your machine and saves fixes to `overrides.json` in the trip folder.
 - **Publish** uploads only what the trip's `trip.json` references, then updates the public `trips.json` list and covers.
 - **The Worker** serves an allow-list of files from the private bucket. **Access** decides who sees which trip; the Worker never does. It also keeps each visitor's favourites (hearted shots, private to them, synced across their devices) as small JSON files in the bucket.
-- **The site** is just a static page that reads `trips.json` and `<slug>/trip.json` from the media host with the visitor's cookie.
+- **The site** is just a static page that reads `trips.json` and `<slug>/trip.json` from the media host with the visitor's cookie. Visitors can download what they see: one shot (on a phone, straight to Photos through the share sheet), or on a computer their favourites as one ZIP. Files arrive named by when they were taken, e.g. `2025-05-02_1530_IMG_1234.jpg`.
 
 ## Quick start
 
@@ -79,7 +79,7 @@ A Wander site only needs to read two JSON files from your media host:
 
 Fetch them with `credentials: 'include'`, show times in the trip's own zone, and send people to `/auth/<slug>` to sign in. The [data contract in SPEC.md](SPEC.md#data-contract--build-your-own-site) has the exact shapes and the few rules that matter.
 
-Or use the **[reference viewer](site/)**: a static site (no build step) with the trip list, a map, day filter, gallery, photo/video viewer and the sign-in flow. Put your media host in `site/public/config.local.js` and deploy it to Cloudflare Pages.
+Or use the **[reference viewer](site/)**: a static site (no build step) with the trip list, a map, day filter, gallery, photo/video viewer, favourites, downloads and the sign-in flow. Put your media host in `site/public/config.local.js` and deploy it to Cloudflare Pages.
 
 ![The reference viewer's landing page: one trip card with its cover, dates and counts, and a "Private" lock badge](docs/viewer-landing.png)
 
@@ -89,7 +89,7 @@ Or use the **[reference viewer](site/)**: a static site (no build step) with the
 
 | Path | What it is |
 |---|---|
-| [`tripmap/`](tripmap/) | Builder, local editor, publish, Access scripting and launchers (Python, no dependencies besides Pillow). [README](tripmap/README.md) |
+| [`tripmap/`](tripmap/) | Builder, local editor, publish, Access scripting, favourites export and launchers (Python, no dependencies besides Pillow). [README](tripmap/README.md) |
 | [`worker/`](worker/) | The Cloudflare Worker for the media host (plain JS, no dependencies). |
 | [`site/`](site/) | Reference viewer: a static site for your trips, deployable to Cloudflare Pages. [README](site/README.md) |
 | [`wander.config.example.json`](wander.config.example.json) | Template for your instance settings (`~/.wander/config.json`). |

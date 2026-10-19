@@ -26,8 +26,14 @@
   <button class="lb-btn lb-prev" id="lb-prev" aria-label="Previous">‹</button>
   <div class="lb-stage" id="lb-stage"></div>
   <button class="lb-btn lb-next" id="lb-next" aria-label="Next">›</button>
-  <div class="lb-meta"><button class="heart" id="lb-fav" aria-label="Favourite" aria-pressed="false" hidden></button><span id="lb-caption"></span><button class="link" id="lb-onmap" hidden>Show on map</button></div>
+  <div class="lb-meta"><button class="heart" id="lb-fav" aria-label="Favourite" aria-pressed="false" hidden></button><span id="lb-caption"></span><button class="link" id="lb-onmap" hidden>Show on map</button><a class="lb-dl" id="lb-dl" href="#" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 17v3h16v-3"/></svg><span>Download</span></a></div>
 </div>
+
+<dialog id="zip" class="zip" aria-labelledby="zip-title">
+  <h2 id="zip-title">Download favourites</h2>
+  <div id="zip-body"></div>
+  <div class="zip-actions" id="zip-actions"></div>
+</dialog>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" integrity="sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr" crossorigin="anonymous"></script>

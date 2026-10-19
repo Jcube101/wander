@@ -185,5 +185,37 @@ class CoverChoice(TripFixture):
         self.assertIn("chosen cover v1.mp4 is a video", self.logs)
 
 
+
+class DownloadSize(TripFixture):
+    """trip.json's optional "bytes": the size of what a site downloads (media, else the card)."""
+
+    def test_bytes_is_the_full_preview_else_the_card(self):
+        out = self.root / "_tripmap"
+        public, _ = self.build()
+        items = self.by_orig(public)
+        for x in items.values():  # a quick build: no full previews yet, so the card
+            self.assertNotIn("media", x)
+            self.assertEqual(x["bytes"], (out / x["card"]).stat().st_size)
+        (out / "media" / f"{items['p1.jpg']['id']}.jpg").write_bytes(b"x" * 1234)
+        public, local = self.build()
+        p1 = self.by_orig(public)["p1.jpg"]
+        self.assertEqual((p1["media"], p1["bytes"]), (f"media/{p1['id']}.jpg", 1234))
+        self.assertEqual(self.by_orig(local)["p1.jpg"]["bytes"], 1234)
+
+    def test_no_preview_at_all_no_bytes(self):
+        out = self.root / "_tripmap"
+        public, _ = self.build()
+        p2 = self.by_orig(public)["p2.jpg"]
+        with mock.patch.object(build, "make_card"), mock.patch.object(build, "make_photo"):
+            (out / p2["card"]).unlink()
+            (out / p2["thumb"]).unlink()
+            argv = ["build.py", str(self.root), "--name", "Test Trip", "--tz", "+00:00", "--data-only"]
+            with mock.patch.object(sys, "argv", argv),                  mock.patch.object(build, "run_exiftool", return_value=[dict(r) for r in self.rows]),                  mock.patch.object(build, "need"), mock.patch.object(build, "log"):
+                build.main()
+        public = json.loads((out / "trip.json").read_text(encoding="utf-8"))
+        p2 = self.by_orig(public)["p2.jpg"]
+        self.assertNotIn("bytes", p2)
+        self.assertNotIn("card", p2)
+
 if __name__ == "__main__":
     unittest.main()

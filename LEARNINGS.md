@@ -1,6 +1,6 @@
 # Wander — Learnings
 
-Hard-won lessons. Each one: **symptom → cause → fix/rule**. Add new ones here, not in CLAUDE.md. Accepted limitations are rows too; the design decisions behind it all are under [Decisions](#decisions) (D1–D11).
+Hard-won lessons. Each one: **symptom → cause → fix/rule**. Add new ones here, not in CLAUDE.md. Accepted limitations are rows too; the design decisions behind it all are under [Decisions](#decisions) (D1–D12).
 
 ## Cloudflare / hosting
 
@@ -58,6 +58,9 @@ Hard-won lessons. Each one: **symptom → cause → fix/rule**. Add new ones her
 |---|---|---|
 | Captions said "gps" | Site displayed the internal `loc` field | `loc` is a source code — never display it |
 | Landing hero blurry | 640 px card used as a full-width hero | Publish a 1600 px `coverImage` too |
+| A ZIP of favourites failed on shots the gallery already showed (CORS error) | The `<img>` (no `Origin`, no `crossorigin`) cached the file without CORS headers, and the browser handed that cached copy to the later CORS `fetch` of the same URL. Reproduced in Chromium, 2026-10-20 | Fetch media files with `cache: "no-store"`. Media tags stay without `crossorigin` |
+| `<a download="name">` to the media host saved nothing useful | The `download` attribute is ignored for cross-origin URLs | `?download=1`: the Worker adds `Content-Disposition: attachment` with the readable name |
+| Rule (iPhone, not yet seen live): the share sheet can refuse after a slow fetch | `navigator.share` needs a recent tap; fetching a big video first can use it up (`NotAllowedError`) | Keep the fetched file; the button turns into **Save** and the next tap shares at once |
 | Reference viewer stuck on "Loading…", unstyled, at `/<slug>/` on Pages | Relative `app.js`/`style.css` resolved under `/<slug>/`, and Pages' SPA fallback answered them with `index.html` (text/html), which browsers refuse as a module or stylesheet | Root-absolute asset and home links (`/app.js`, `/`); a site test resolves them from `/`, `/<slug>` and `/<slug>/`. Serve the viewer from the root of its host name |
 
 ## Dev workflow
@@ -71,7 +74,7 @@ Hard-won lessons. Each one: **symptom → cause → fix/rule**. Add new ones her
 
 ## Decisions
 
-**D1 — Originals stay on the external disk; only previews go online.** 140 GB of originals is too much for cheap hosting and isn't needed for viewing. Bundle is ~2.5 GB per trip (thumbs 200px, cards 640px, photos 1600px, video 720p H.264). Friends request originals directly.
+**D1 — Originals stay on the external disk; only previews go online.** 140 GB of originals is too much for cheap hosting and isn't needed for viewing. Bundle is ~2.5 GB per trip (thumbs 200px, cards 640px, photos 1600px, video 720p H.264). Friends heart the shots they want; the owner exports those originals and hands them over (D12).
 
 **D2 — Cloudflare R2 over S3.** Zero egress fees (video replays cost nothing), 10 GB free, same Cloudflare account as the domain, S3-compatible tooling (rclone).
 
@@ -92,3 +95,5 @@ Hard-won lessons. Each one: **symptom → cause → fix/rule**. Add new ones her
 **D10 — One public repo; each instance's settings live outside git.** Domains, bucket, rclone remote and Access naming are in `~/.wander/config.json` (Python tools) and a gitignored `worker/wrangler.toml` (the Worker's route, bucket and `SITE_ORIGINS`), each with a committed `*.example.*` template. Two files rather than one because wrangler needs its own format for routes and bindings; they only share the media host and bucket. Owner-specific notes for Claude Code live in `~/.wander/NOTES.md`, which CLAUDE.md imports when present. Docs and tests use example.com and a made-up trip. Sign-in now returns only to an exact `SITE_ORIGINS` origin (it used to accept any subdomain of the owner's domain).
 
 **D11 — Favourites are per person, in R2, keyed by a salted hash of the email.** Synced across devices without a database: one small JSON file per person per trip (`favs/<slug>/<sha256(salt + email)>.json`), read and written only by the Worker at `/<slug>/favorites`, which the trip's Access app already guards. Identity comes from the Access token the Worker verifies, never from the page. The salt is a Worker secret, so file names can't be reversed by hashing known emails; no email is stored. v1 is private (no shared counts). Read-modify-write with last write wins is fine for one person tapping a few hearts; the site queues its taps. Rejected: browser storage (doesn't sync, and the client rules forbid storing trip data), a KV/D1 database (D6), sending the email from the page (forgeable).
+
+**D12 — Downloads: previews from the site, originals by hand.** The site offers the files people already view (1600 px photos, 720p clips) as downloads: one shot via `?download=1` (the Worker names it `<date>_<time>_<original name>`), or on desktop the favourites in view as one ZIP built in the browser (uncompressed, at most 500 MB, so pick a day for more). Phones save one shot at a time through the share sheet, which can put it in Photos. Originals still never go online (D1): someone hearts what they want, and the owner runs `tripmap/export_favs.py`, which reads their favourites from R2 and copies the originals into a folder to hand over. Rejected: serving originals behind Access (140 GB per trip, and R2's free tier is 10 GB); a server-side ZIP (a Worker can't hold hundreds of MB, and it would need a new endpoint).

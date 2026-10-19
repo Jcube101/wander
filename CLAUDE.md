@@ -4,15 +4,15 @@ Context for AI assistants working in this repo.
 
 ## What this is
 Tooling and infrastructure for Wander, a private multi-trip travel archive. Two parts:
-- `tripmap/` — Python (3.9+, Pillow; shells out to exiftool, ffmpeg, rclone). Builds a trip folder into map data and previews, runs the local editor, publishes to R2, manages Cloudflare Access. Runs **from this repo** against a trip folder (often on an external drive); each trip folder only holds the launcher that `tripmap/launcher.py` writes. Never copy the code into trip folders.
-- `worker/` — Cloudflare Worker (plain JS, no deps) bound to a private R2 bucket, on the instance's media host. Serves an allow-list of files, and each visitor's own favourites at `/<slug>/favorites` (stored under `favs/`).
+- `tripmap/` — Python (3.9+, Pillow; shells out to exiftool, ffmpeg, rclone). Builds a trip folder into map data and previews, runs the local editor, publishes to R2, manages Cloudflare Access, exports one person's favourites as originals (`export_favs.py`). Runs **from this repo** against a trip folder (often on an external drive); each trip folder only holds the launcher that `tripmap/launcher.py` writes. Never copy the code into trip folders.
+- `worker/` — Cloudflare Worker (plain JS, no deps) bound to a private R2 bucket, on the instance's media host. Serves an allow-list of files (`?download=1` on cards/full previews makes them a named download), and each visitor's own favourites at `/<slug>/favorites` (stored under `favs/`).
 
 - `site/` — reference viewer: a static site (HTML/CSS/JS modules, Leaflet) that reads the data contract; deployable to Cloudflare Pages. Media host in `site/public/config.js` (example.com in git), overridden by the gitignored `site/public/config.local.js`.
 
 The live instance's own website may live elsewhere (see the instance notes); any static site that follows the data contract can be the front end.
 
 ## Instance settings (never in git)
-- `~/.wander/config.json` (or `wander.config.json` in the repo root, or `$WANDER_CONFIG`): site URL, media host, rclone remote + bucket, Access name prefix and session lengths. Template: `wander.config.example.json`; loaded by `tripmap/config.py`.
+- `~/.wander/config.json` (or `wander.config.json` in the repo root, or `$WANDER_CONFIG`): site URL, media host, rclone remote + bucket, Access name prefix and session lengths, `owner_email` (whose favourites `export_favs.py` exports by default). Template: `wander.config.example.json`; loaded by `tripmap/config.py`.
 - `worker/wrangler.toml` (gitignored): the Worker's route, bucket, `SITE_ORIGINS`, and for favourites `ACCESS_TEAM_DOMAIN` + `ACCESS_AUD` (one AUD tag per trip). Template: `worker/wrangler.example.toml`.
 - Worker secret `FAVS_SALT` (favourites' file names); its only readable copy is `~/.wander/favs-salt`. Never print or commit it.
 - `site/public/config.local.js` (gitignored): the reference viewer's media host; its keys override `config.js`.
@@ -29,7 +29,8 @@ Committed files, docs, tests and commit messages use `example.com` and a made-up
 - **Worker path handling:** keys are used exactly as sent; any `%`-encoding, `..` or `//` is refused so Access and the Worker can't disagree about paths. Keep it that way.
 - **Cloudflare API token** lives in `~/.wander/cloudflare.env`, read only by `tripmap/access.py`. Never read, print or commit it; never write Access changes without the owner's yes to the `--dry-run` plan.
 - **Never upload `trip.js` or `index.html`** to R2 — `trip.js` contains local folder paths. `publish.py` excludes them; the Worker refuses them anyway.
-- **Favourites (`favs/` in R2) are people's private data:** the Worker never serves them as files, `publish.py` never deletes outside `<slug>/thumbs|cards|media/`, identity comes only from the verified `Cf-Access-Jwt-Assertion` token, and no raw email goes into R2 or logs. Writes stay CORS "simple requests" (`text/plain`), because Access refuses preflights.
+- **Favourites (`favs/` in R2) are people's private data:** the Worker never serves them as files, `publish.py` never deletes outside `<slug>/thumbs|cards|media/`, identity comes only from the verified `Cf-Access-Jwt-Assertion` token, and no raw email goes into R2 or logs. Writes stay CORS "simple requests" (`text/plain`), because Access refuses preflights. `export_favs.py` only reads them (`rclone cat`) and copies originals only into a folder outside the trip and the repo.
+- **Download names** follow one rule in three places (Worker, `site/public/lib.js`, `export_favs.py`); `worker/test/download-names.json` is the shared test cases. Change all three together.
 - **rclone key is bucket-scoped** → every rclone call needs `--s3-no-check-bucket` (already in `publish.py`).
 - **No built-in timezone or camera offset:** `build.py --tz` is required; the camera offset defaults to `+00:00`; both are saved in `build_args.json`.
 - **Live Worker:** deploy only after tests pass, then run RUNBOOK → Worker deploys checks straight away; if one fails, `npx wrangler rollback` before investigating.
@@ -55,5 +56,5 @@ Use `/new-trip`, which follows `RUNBOOK.md` → New trip.
 - `SPEC.md` — what Wander must do, how the pieces fit, and the data contract.
 - `RUNBOOK.md` — everyday tasks, new trip, Worker deploy checks, troubleshooting.
 - `ROADMAP.md` — Done / Now / Next / Later.
-- `LEARNINGS.md` — gotchas (symptom → cause → fix), accepted limitations, and Decisions D1–D11. Read it before debugging; add new lessons there.
+- `LEARNINGS.md` — gotchas (symptom → cause → fix), accepted limitations, and Decisions D1–D12. Read it before debugging; add new lessons there.
 - `CONTRIBUTING.md` — dev setup, tests, the rules every change keeps.

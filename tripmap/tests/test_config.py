@@ -25,6 +25,7 @@ CUSTOM = {
     "storage": {"remote": "cf", "bucket": "my-trips"},
     "access": {"prefix": "Trips", "appSession": "12h", "policySession": "100h"},
     "defaults": {"contact": "me@example.org"},
+    "owner_email": " Me@Example.org ",
 }
 
 
@@ -57,6 +58,7 @@ class Load(TempConfig):
         self.assertEqual(cfg.remote, "r2:trip-media")
         self.assertEqual(cfg.site_url, "https://wander.example.com")
         self.assertEqual((cfg.access_prefix, cfg.app_session, cfg.policy_session), ("Wander", "24h", "730h"))
+        self.assertEqual(cfg.owner_email, "you@example.com")
 
     def test_custom_values(self):
         self.use(self.write(CUSTOM))
@@ -64,20 +66,21 @@ class Load(TempConfig):
         self.assertEqual(cfg.remote, "cf:my-trips")
         self.assertEqual(cfg.site_url, "https://trips.example.org")  # trailing slash dropped
         self.assertEqual(cfg.contact, "me@example.org")
+        self.assertEqual(cfg.owner_email, "Me@Example.org")  # trimmed; lowercased where it's used
 
     def test_optional_parts_have_defaults(self):
         self.use(self.write({"media": {"host": "m.example.org"}, "storage": {"remote": "r2", "bucket": "abc"}}))
         cfg = config.load()
-        self.assertEqual((cfg.site_url, cfg.access_prefix, cfg.app_session, cfg.policy_session, cfg.contact),
-                         ("", "Wander", "24h", "730h", ""))
+        self.assertEqual((cfg.site_url, cfg.access_prefix, cfg.app_session, cfg.policy_session, cfg.contact,
+                          cfg.owner_email), ("", "Wander", "24h", "730h", "", ""))
 
     def test_bad_values_are_all_listed(self):
         bad = {"media": {"host": "https://media.example.com/"}, "storage": {"remote": "r2:", "bucket": "B"},
-               "site": {"url": "http://x.example.com"}, "access": {"appSession": "1 day"}}
+               "site": {"url": "http://x.example.com"}, "access": {"appSession": "1 day"}, "owner_email": "me"}
         self.use(self.write(bad))
         with self.assertRaises(config.ConfigError) as e:
             config.load()
-        for key in ("media.host", "storage.remote", "storage.bucket", "site.url", "access.appSession"):
+        for key in ("media.host", "storage.remote", "storage.bucket", "site.url", "access.appSession", "owner_email"):
             self.assertIn(key, str(e.exception))
 
     def test_invalid_json_and_bom(self):

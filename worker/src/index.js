@@ -9,6 +9,7 @@
 // bucket, supports Range requests (video seeking), and answers the website's
 // cross-site requests with cookies allowed. The one thing it writes is each
 // visitor's own favourites (/<slug>/favorites, kept under favs/, never served).
+// ?download=1 on a trip's card or full preview makes it a download with a readable name.
 //
 // Settings (wrangler.toml [vars]):
 //   SITE_ORIGINS  comma-separated site origins, e.g. "https://wander.example.com".
@@ -177,20 +178,25 @@ async function accessEmail(request, cfg) {
   return claims.email.toLowerCase();
 }
 
-// Ids of the items a trip publishes (archived shots aren't in trip.json), or null.
-const tripIds = new Map();
-async function knownIds(env, slug) {
-  const hit = tripIds.get(slug);
-  if (hit && Date.now() - hit.at < TRIP_TTL) return hit.ids;
+// The items a trip publishes (archived shots aren't in trip.json), as id → {t, orig},
+// and its zone: {items, tz}, or null if there's no trip.json. For favourites and downloads.
+const trips = new Map();
+async function tripIndex(env, slug) {
+  const hit = trips.get(slug);
+  if (hit && Date.now() - hit.at < TRIP_TTL) return hit;
   const obj = await env.BUCKET.get(`${slug}/trip.json`);
   if (!obj) {
-    tripIds.delete(slug);
+    trips.delete(slug);
     return null;
   }
-  const items = JSON.parse(await obj.text()).items || [];
-  const ids = new Set(items.map((x) => x && x.id).filter((id) => typeof id === "string"));
-  tripIds.set(slug, { at: Date.now(), ids });
-  return ids;
+  const data = JSON.parse(await obj.text());
+  const items = new Map();
+  for (const x of data.items || []) {
+    if (x && typeof x.id === "string") items.set(x.id, { t: x.t, orig: x.orig });
+  }
+  const trip = { at: Date.now(), items, tz: Number(data.tzOffsetMin) || 0 };
+  trips.set(slug, trip);
+  return trip;
 }
 
 async function favoritesKey(slug, salt, email) {
@@ -255,8 +261,9 @@ async function favorites(request, env, slug, sites, cors) {
     throw e;
   }
   if (!email) return fail("Sign in first", 401);
-  const ids = await knownIds(env, slug);
-  if (!ids) return fail("Not found", 404);
+  const trip = await tripIndex(env, slug);
+  if (!trip) return fail("Not found", 404);
+  const ids = trip.items;
   const key = await favoritesKey(slug, cfg.salt, email);
   const current = (await storedIds(env, key)).filter((id) => ids.has(id)); // drops archived shots
   if (request.method === "GET") return json(current);
@@ -286,6 +293,42 @@ async function favorites(request, env, slug, sites, cors) {
     await env.BUCKET.delete(key);
   }
   return json(next);
+}
+
+// ---------------------------------------------------------------- downloads
+// GET /<slug>/cards|media/<id>.<ext>?download=1 → the same file, plus
+// Content-Disposition: attachment; filename="<YYYY-MM-DD_HHMM>_<original name>.<ext>"
+// (the shot's time in the trip's zone; SPEC.md → Downloads). Only download=1 counts, and
+// no other parameter changes anything. tripmap/export_favs.py and the reference viewer
+// name files the same way (shared cases: test/download-names.json).
+const DOWNLOADABLE = /^([a-z0-9-]+)\/(?:cards|media)\/([\w-]+)\.(jpg|mp4)$/;
+const NAME_MAX = 80;
+
+// The original's name without its extension, reduced to A-Z a-z 0-9 . _ - (accents
+// dropped, anything else → "_"), so it's safe in a header and on any file system.
+function safeBase(orig, id) {
+  const s = typeof orig === "string" ? orig : "";
+  const dot = s.lastIndexOf(".");
+  const base = (dot > 0 ? s.slice(0, dot) : s).normalize("NFKD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^[._-]+|[._-]+$/g, "");
+  return base.slice(0, NAME_MAX).replace(/[._-]+$/, "") || id;
+}
+
+function downloadName(item, tz, id, ext) {
+  const base = safeBase(item && item.orig, id);
+  const t = item && item.t;
+  if (typeof t !== "number" || !Number.isFinite(t)) return `${base}.${ext}`;
+  const d = new Date((t + tz * 60) * 1000); // its UTC fields read as the trip's local time
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}_${p(d.getUTCHours())}${p(d.getUTCMinutes())}_${base}.${ext}`;
+}
+
+async function downloadFilename(env, slug, id, ext) {
+  let trip = null;
+  try {
+    trip = await tripIndex(env, slug);
+  } catch { /* unreadable trip.json: the plain name below */ }
+  return downloadName(trip && trip.items.get(id), trip ? trip.tz : 0, id, ext);
 }
 
 export default {
@@ -345,6 +388,8 @@ export default {
     headers.set("accept-ranges", "bytes");
     headers.set("cache-control", cacheControl(key, isPublic));
     headers.set("x-content-type-options", "nosniff");
+    const dl = !isPublic && url.searchParams.get("download") === "1" ? key.match(DOWNLOADABLE) : null;
+    if (dl) headers.set("content-disposition", `attachment; filename="${await downloadFilename(env, dl[1], dl[2], dl[3])}"`);
 
     if (request.method === "HEAD") {
       headers.set("content-length", String(obj.size));

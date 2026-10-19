@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { test } from "node:test";
+import { crc32 as zlibCrc32 } from "node:zlib";
 import * as W from "../public/lib.js";
 
 const MEDIA = "https://media.example.com";
@@ -114,7 +115,7 @@ test("favourites: endpoint, POST body (text/plain JSON) and what a response mean
   assert.equal(W.favoritesUrl(MEDIA + "/", "lisbon-2025"), MEDIA + "/lisbon-2025/favorites");
   assert.equal(W.favoriteBody("abc123def456", true), '{"id":"abc123def456","fav":true}');
   assert.equal(W.favoriteBody("abc123def456", 0), '{"id":"abc123def456","fav":false}');
-  const out = (r) => W.favoritesOutcome({ type: "cors", ok: r.status >= 200 && r.status < 300, ...r });
+  const out = (r) => W.accessOutcome({ type: "cors", ok: r.status >= 200 && r.status < 300, ...r });
   assert.equal(out({ status: 200 }), "ok");
   assert.equal(out({ type: "opaqueredirect", status: 0, ok: false }), "signed-out"); // Access → its login page
   assert.equal(out({ status: 401 }), "signed-out");
@@ -157,4 +158,106 @@ test("lightbox stepping wraps; HTML escaping", () => {
   assert.equal(W.step(0, 0, 1), -1);
   assert.equal(W.escapeHtml(`<img src=x onerror="a('b')">&`), "&lt;img src=x onerror=&quot;a(&#39;b&#39;)&quot;&gt;&amp;");
   assert.equal(W.escapeHtml(null), "");
+});
+
+// ---------------------------------------------------------------- downloads
+const NAMES = JSON.parse(readFileSync(new URL("../../worker/test/download-names.json", import.meta.url), "utf8")).cases;
+
+test("download names: the same as the Worker's and export_favs.py's (shared cases)", () => {
+  assert.ok(NAMES.length >= 10);
+  for (const c of NAMES) assert.equal(W.fileName({ id: c.id, orig: c.orig, t: c.t }, c.tzOffsetMin, c.ext), c.name, c.why);
+  const used = new Set();
+  assert.deepEqual(["a.jpg", "a.jpg", "A.JPG", "a_2.jpg", "b"].map((n) => W.uniqueName(n, used)),
+    ["a.jpg", "a_2.jpg", "A_3.JPG", "a_2_2.jpg", "b"]); // as export_favs.unique_name
+});
+
+test("downloads: the full preview, else the card; ?download=1 on the media host", () => {
+  const t = Date.UTC(2025, 4, 2, 14, 30) / 1000;
+  const video = { id: "v1", orig: "DJI_0001.MP4", t, media: "media/v1.mp4", card: "cards/v1.jpg" };
+  const quick = { id: "p1", orig: "IMG_1.HEIC", t, card: "cards/p1.jpg" }; // no full preview yet
+  assert.equal(W.downloadPath(video), "media/v1.mp4");
+  assert.equal(W.downloadPath(quick), "cards/p1.jpg");
+  assert.equal(W.downloadPath({ id: "x", thumb: "thumbs/x.jpg" }), null); // thumbnails are never the download
+  assert.equal(W.downloadUrl(MEDIA, "lisbon-2025", video), MEDIA + "/lisbon-2025/media/v1.mp4?download=1");
+  assert.equal(W.downloadUrl(MEDIA, "lisbon-2025", { id: "x" }), null);
+  assert.equal(W.downloadName(video, 60), "2025-05-02_1530_DJI_0001.mp4");
+  assert.equal(W.downloadName(quick, 60), "2025-05-02_1530_IMG_1.jpg");
+});
+
+test("ZIP estimate: files, bytes from trip.json, and how many sizes are unknown; desktop only", () => {
+  const items = [{ media: "media/a.jpg", bytes: 400e3 }, { media: "media/b.mp4", bytes: 60e6 }, { card: "cards/c.jpg" }, { thumb: "thumbs/d.jpg" }];
+  assert.deepEqual(W.zipEstimate(items), { files: 3, bytes: 60.4e6, unknown: 1 });
+  assert.equal(W.ZIP_MAX, 500e6);
+  assert.deepEqual([840e3, 1, 8.44e6, 84.4e6, 499.6e6, 1.234e9].map(W.fmtBytes), ["840 KB", "1 KB", "8.4 MB", "84 MB", "500 MB", "1.2 GB"]);
+  const mm = (hits) => (q) => ({ matches: hits.includes(q) });
+  assert.equal(W.isDesktop(mm(["(hover: hover) and (pointer: fine)", "(min-width: 821px)"])), true);
+  assert.equal(W.isDesktop(mm(["(min-width: 821px)"])), false); // a tablet: touch, however wide
+  assert.equal(W.isDesktop(mm(["(hover: hover) and (pointer: fine)"])), false); // a narrow window
+});
+
+test("CRC-32: the standard check value, and the same when fed in pieces", () => {
+  const enc = new TextEncoder();
+  assert.equal(W.crc32(enc.encode("123456789")), 0xcbf43926);
+  assert.equal(W.crc32(new Uint8Array()), 0);
+  const data = Uint8Array.from({ length: 70000 }, (_, i) => (i * 7919) % 251);
+  assert.equal(W.crc32(data.subarray(30000), W.crc32(data.subarray(0, 30000))), zlibCrc32(data));
+});
+
+// A minimal ZIP reader, written from the format spec, to check what zipWriter makes.
+function readZip(buf) {
+  const v = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  const end = buf.byteLength - 22;
+  assert.equal(v.getUint32(end, true), 0x06054b50, "end of central directory last, no comment");
+  const count = v.getUint16(end + 10, true), cdSize = v.getUint32(end + 12, true), cdAt = v.getUint32(end + 16, true);
+  assert.equal(v.getUint16(end + 8, true), count);
+  assert.equal(cdAt + cdSize, end);
+  const files = [];
+  for (let i = 0, at = cdAt; i < count; i++) {
+    assert.equal(v.getUint32(at, true), 0x02014b50);
+    const nameLen = v.getUint16(at + 28, true), extra = v.getUint16(at + 30, true), comment = v.getUint16(at + 32, true);
+    const e = { flags: v.getUint16(at + 8, true), method: v.getUint16(at + 10, true), time: v.getUint16(at + 12, true),
+      date: v.getUint16(at + 14, true), crc: v.getUint32(at + 16, true), csize: v.getUint32(at + 20, true),
+      size: v.getUint32(at + 24, true), local: v.getUint32(at + 42, true),
+      name: new TextDecoder().decode(buf.subarray(at + 46, at + 46 + nameLen)) };
+    const l = e.local;
+    assert.equal(v.getUint32(l, true), 0x04034b50);
+    assert.equal(v.getUint32(l + 14, true), e.crc);
+    assert.equal(v.getUint32(l + 18, true), e.csize);
+    assert.equal(v.getUint32(l + 22, true), e.size);
+    const lName = v.getUint16(l + 26, true), lExtra = v.getUint16(l + 28, true);
+    assert.equal(new TextDecoder().decode(buf.subarray(l + 30, l + 30 + lName)), e.name);
+    e.data = buf.subarray(l + 30 + lName + lExtra, l + 30 + lName + lExtra + e.csize);
+    files.push(e);
+    at += 46 + nameLen + extra + comment;
+  }
+  return files;
+}
+
+test("ZIP: stored files a standard reader can open, with names, sizes, CRCs and the trip-zone time", async () => {
+  const enc = new TextEncoder();
+  const t = Date.UTC(2025, 4, 2, 14, 30, 58) / 1000;
+  const zip = W.zipWriter();
+  const photo = Uint8Array.from({ length: 5000 }, (_, i) => i % 256);
+  zip.add("2025-05-02_1530_IMG_1.jpg", [photo.subarray(0, 1000), new Blob([photo.subarray(1000)])],
+    { crc: W.crc32(photo), size: photo.length, t, tzOffsetMin: 60 });
+  zip.add("empty.txt", [], { crc: 0, size: 0, t, tzOffsetMin: 60 });
+  const clip = enc.encode("a short clip");
+  zip.add("2025-05-02_1531_DJI_0002.mp4", [clip], { crc: W.crc32(clip), size: clip.length, t: t + 60, tzOffsetMin: 60 });
+  assert.equal(zip.count, 3);
+  const before = zip.size;
+  const buf = new Uint8Array(await new Blob(zip.finish()).arrayBuffer());
+  assert.equal(before, (30 + 25 + 5000) + (30 + 9) + (30 + 28 + 12)); // headers + data, before the directory
+  const files = readZip(buf);
+  assert.deepEqual(files.map((f) => f.name), ["2025-05-02_1530_IMG_1.jpg", "empty.txt", "2025-05-02_1531_DJI_0002.mp4"]);
+  for (const [f, data] of [[files[0], photo], [files[1], new Uint8Array()], [files[2], clip]]) {
+    assert.equal(f.method, 0); // stored
+    assert.equal(f.flags, 0x0800);
+    assert.equal(f.size, data.length);
+    assert.deepEqual(f.data, data);
+    assert.equal(f.crc, zlibCrc32(data));
+  }
+  // 15:30:58 in the trip's zone, as MS-DOS date and time
+  assert.equal(files[0].date, ((2025 - 1980) << 9) | (5 << 5) | 2);
+  assert.equal(files[0].time, (15 << 11) | (30 << 5) | 29);
+  assert.deepEqual(W.dosDateTime(0, 0), { date: (1 << 5) | 1, time: 0 }); // before 1980: 1 Jan 1980
 });

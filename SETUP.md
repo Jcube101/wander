@@ -43,6 +43,7 @@ cp wander.config.example.json ~/.wander/config.json     # Windows: copy wander.c
 | `access.prefix` | `Wander` | Access names start with it: `Wander – All trips`, `Wander – Lisbon crew` |
 | `access.appSession` / `policySession` | `24h` / `730h` | How long a sign-in lasts (per app / per policy) |
 | `defaults.contact` | `""` | Optional "Request original" link in the local viewer |
+| `owner_email` | `you@example.com` | The email you sign in with; `tripmap/export_favs.py` exports your favourites when you don't name someone else |
 
 `python tripmap/config.py` shows which file is used and what it says. (It looks at `$WANDER_CONFIG` first, then `wander.config.json` in the repo root, then `~/.wander/config.json`; the repo file is gitignored.)
 
@@ -180,6 +181,8 @@ Signed-in visitors can heart shots; each person's favourites sync across their d
    Then the checks in [RUNBOOK.md → Worker deploys](RUNBOOK.md#worker-deploys).
 
 Without these, everything else works and `/<slug>/favorites` answers 500, so the reference viewer shows no hearts.
+
+`tripmap/export_favs.py` (copying someone's favourites as originals, [RUNBOOK.md → Originals for someone](RUNBOOK.md#originals-for-someone)) reads the same `~/.wander/favs-salt` to find their file.
 
 ## Next
 

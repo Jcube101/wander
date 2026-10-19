@@ -1,6 +1,7 @@
 // Run: npm test   (plain node, no dependencies â€” mocks the R2 binding and Access's signing keys)
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import worker from "../src/index.js";
 
@@ -8,18 +9,32 @@ import worker from "../src/index.js";
 const A = "aaaaaaaaaaa1", B = "bbbbbbbbbbb2", C = "ccccccccccc3";
 const ARCHIVED = "ddddddddddd4"; // was in the trip once; not in trip.json any more
 const BIG = Array.from({ length: 2001 }, (_, i) => i.toString(16).padStart(12, "0"));
-const tripJson = (ids) => JSON.stringify({ items: ids.map((id) => ({ id, type: "photo" })) });
+const tripJson = (ids, more = {}) => JSON.stringify({ tzOffsetMin: 60, items: ids.map((id) => ({ id, type: "photo", ...more[id] })) });
+const T1430 = Date.UTC(2025, 4, 2, 14, 30, 59) / 1000; // 15:30 in the trip's zone (+01:00)
+const UNLISTED = "fffffffffff9"; // a preview whose shot isn't in trip.json (archived since)
 
 const FILES = {
   "trips.json": ["application/json", '{"trips":[]}'],
   "public/covers/lisbon-2025.jpg": ["image/jpeg", "COVER"],
-  "lisbon-2025/trip.json": ["application/json", tripJson([A, B, C])],
+  "public/media/abc123.jpg": ["image/jpeg", "PUBLIC"], // public/ is never a trip, whatever its folders are called
+  "lisbon-2025/trip.json": ["application/json", tripJson([A, B, C, "abc123"], { abc123: { type: "video", orig: "DJI_0001.MP4", t: T1430 } })],
   "big-2025/trip.json": ["application/json", tripJson(BIG)],
+  "lisbon-2025/thumbs/abc123.jpg": ["image/jpeg", "THUMB"],
   "lisbon-2025/cards/abc123.jpg": ["image/jpeg", "CARD"],
   "lisbon-2025/media/abc123.mp4": ["video/mp4", "0123456789ABCDEFGHIJ"],
+  [`lisbon-2025/media/${UNLISTED}.jpg`]: ["image/jpeg", "OLD"],
+  "broken-2025/trip.json": ["application/json", "{not json"],
+  [`broken-2025/media/${A}.jpg`]: ["image/jpeg", "PHOTO"],
   "lisbon-2025/trip.js": ["text/javascript", "window.TRIP={rel:'D:/private'}"],
   "lisbon-2025/index.html": ["text/html", "<html>"],
 };
+
+// The shared naming cases: each in its own trip, so each has its own zone.
+const NAMES = JSON.parse(readFileSync(new URL("./download-names.json", import.meta.url), "utf8")).cases;
+NAMES.forEach((c, i) => {
+  FILES[`names-${i}/trip.json`] = ["application/json", JSON.stringify({ tzOffsetMin: c.tzOffsetMin, items: [{ id: c.id, orig: c.orig, t: c.t }] })];
+  FILES[`names-${i}/media/${c.id}.${c.ext}`] = ["application/octet-stream", "X"];
+});
 
 function object(key, opts) {
   const [type, body] = FILES[key];
@@ -233,6 +248,14 @@ test("favourites: the token's own list, read and written; stored under a salted 
   assert.equal(STORE.size, 0); // removing the last one deletes the file
 });
 
+test("favourites: the file name for a fixed salt and email (tripmap/export_favs.py checks the same value)", async () => {
+  STORE.clear();
+  await favPost(await token(claims("Alex@Example.com")), { id: A, fav: true });
+  // sha256("test-salt-not-a-secret" + "alex@example.com"); also in tripmap/tests/test_export_favs.py
+  assert.deepEqual([...STORE.keys()], ["favs/lisbon-2025/e2175ea18419e4d926b9ca8e1269105e9011a010ad02e1bc3264ccb8ced827f5.json"]);
+  STORE.clear();
+});
+
 test("favourites: another person's token can't see or change mine", async () => {
   STORE.clear();
   const me = await token(claims("me@example.com"));
@@ -382,4 +405,66 @@ test("favourites: Access's keys are fetched once and cached; unreachable keys â†
   const t = await token(claims("me@example.com", { iss: down }));
   const r = await call(FAV, { headers: { origin: SITE, "cf-access-jwt-assertion": t } }, { ...env, ACCESS_TEAM_DOMAIN: down });
   assert.equal(r.res.status, 503);
+});
+
+// ---------------------------------------------------------------- downloads
+const disposition = async (path, init) => (await call(path, init)).res.headers.get("content-disposition");
+
+test("download=1: the same file, as an attachment named by its time (trip zone) and original name", async () => {
+  for (const [path, name] of [["/lisbon-2025/media/abc123.mp4", "2025-05-02_1530_DJI_0001.mp4"],
+                              ["/lisbon-2025/cards/abc123.jpg", "2025-05-02_1530_DJI_0001.jpg"]]) {
+    const plain = await call(path, fromSite());
+    const dl = await call(path + "?download=1", fromSite());
+    assert.equal(dl.res.status, 200);
+    assert.equal(dl.body, plain.body);
+    assert.equal(dl.res.headers.get("content-disposition"), `attachment; filename="${name}"`);
+    const rest = (h) => [...h].filter(([k]) => k !== "content-disposition");
+    assert.deepEqual(rest(dl.res.headers), [...plain.res.headers], `${path}: only content-disposition differs`);
+  }
+  // Ranges (video seeking), HEAD and 304s keep working, with the same name.
+  const { res, body } = await call("/lisbon-2025/media/abc123.mp4?download=1", { headers: { range: "bytes=5-9" } });
+  assert.equal(res.status, 206);
+  assert.equal(body, "56789");
+  assert.equal(res.headers.get("content-disposition"), 'attachment; filename="2025-05-02_1530_DJI_0001.mp4"');
+  assert.equal(await disposition("/lisbon-2025/media/abc123.mp4?download=1", { method: "HEAD" }), 'attachment; filename="2025-05-02_1530_DJI_0001.mp4"');
+  const etag = `"e-${"lisbon-2025/cards/abc123.jpg".length}"`;
+  assert.equal((await call("/lisbon-2025/cards/abc123.jpg?download=1", { headers: { "if-none-match": etag } })).res.status, 304);
+});
+
+test("download: only download=1, only on cards and full previews; no other parameter changes anything", async () => {
+  for (const path of ["/lisbon-2025/thumbs/abc123.jpg?download=1", "/lisbon-2025/trip.json?download=1",
+                      "/trips.json?download=1", "/public/covers/lisbon-2025.jpg?v=1&download=1",
+                      "/public/media/abc123.jpg?download=1"]) {
+    const { res } = await call(path);
+    assert.equal(res.status, 200, path);
+    assert.equal(res.headers.get("content-disposition"), null, path);
+  }
+  for (const q of ["download=true", "download=0", "download=yes", "download=", "download", "dl=1", "Download=1",
+                   "filename=evil.exe", "download=01", "download=10", "nodownload=1"]) {
+    assert.equal(await disposition(`/lisbon-2025/media/abc123.mp4?${q}`), null, q);
+  }
+  for (const q of ["download=1&filename=evil.exe", "filename=evil.exe&download=1&name=x", "download=1&download=0"]) {
+    assert.equal(await disposition(`/lisbon-2025/media/abc123.mp4?${q}`), 'attachment; filename="2025-05-02_1530_DJI_0001.mp4"', q);
+  }
+  // Still the allow-list and path rules first.
+  for (const path of ["/lisbon-2025/trip.js?download=1", "/lisbon-2025/media/nope.mp4?download=1",
+                      "/favs/lisbon-2025/x.json?download=1", "/lisbon-2025/media/%2e%2e/abc123.mp4?download=1"]) {
+    assert.equal((await call(path)).res.status, 404, path);
+  }
+});
+
+test("download names: the shared cases (download-names.json), sanitised and in the trip's zone", async () => {
+  assert.ok(NAMES.length >= 10);
+  for (const [i, c] of NAMES.entries()) {
+    assert.equal(await disposition(`/names-${i}/media/${c.id}.${c.ext}?download=1`), `attachment; filename="${c.name}"`, c.why);
+    assert.match(c.name, /^[A-Za-z0-9._-]+$/, c.why);
+  }
+});
+
+test("download: a shot missing from trip.json, or an unreadable trip.json, still downloads under its id", async () => {
+  assert.equal(await disposition(`/lisbon-2025/media/${UNLISTED}.jpg?download=1`), `attachment; filename="${UNLISTED}.jpg"`);
+  const { res, body } = await call(`/broken-2025/media/${A}.jpg?download=1`);
+  assert.equal(res.status, 200);
+  assert.equal(body, "PHOTO");
+  assert.equal(res.headers.get("content-disposition"), `attachment; filename="${A}.jpg"`);
 });

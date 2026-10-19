@@ -103,11 +103,29 @@ h1,h2,.brand{font-family:Fraunces,Georgia,serif;font-weight:600}
 .lb{position:fixed;inset:0;z-index:2000;background:rgba(10,10,10,.94);display:grid;grid-template-rows:1fr auto;color:#eee}
 .lb-stage{display:flex;align-items:center;justify-content:center;min-height:0;padding:48px 56px 8px}
 .lb-stage img,.lb-stage video{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px}
-.lb-meta{display:flex;gap:16px;justify-content:center;align-items:center;padding:10px 16px calc(14px + env(safe-area-inset-bottom));font-size:14px}
+.lb-meta{display:flex;flex-wrap:wrap;gap:4px 16px;justify-content:center;align-items:center;padding:10px 16px calc(14px + env(safe-area-inset-bottom));font-size:14px}
 .lb-meta .link{color:#9fe3d9}
 .lb-meta .heart{position:static;width:44px;height:44px;flex:none;background:rgba(255,255,255,.12)}
+/* download: a link on desktop; on phones a button that opens the share sheet ("Save" = tap again) */
+.lb-dl{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 8px;border-radius:999px;color:#9fe3d9;text-decoration:none;font-weight:500}
+.lb-dl svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.lb-dl[data-state="busy"]{opacity:.7;cursor:progress}
+.lb-dl[data-state="ready"]{color:#fff;background:rgba(255,255,255,.16);padding:0 16px}
 .lb-btn{position:absolute;background:rgba(255,255,255,.12);color:#fff;border:0;border-radius:999px;width:44px;height:44px;font-size:22px;cursor:pointer;z-index:1}
 .lb-btn:hover{background:rgba(255,255,255,.22)}
 .lb-close{top:12px;right:12px}
 .lb-prev{left:10px;top:50%;transform:translateY(-50%)}
 .lb-next{right:10px;top:50%;transform:translateY(-50%)}
+
+/* favourites ZIP (desktop only: hidden on touch and narrow screens) */
+.fav-tools{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px;
+  font-size:14px;color:var(--muted)}
+@media (hover:none),(pointer:coarse),(max-width:820px){.zip-only{display:none !important}}
+.zip{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);padding:20px 22px;
+  width:min(480px,calc(100vw - 32px));box-shadow:var(--shadow)}
+.zip::backdrop{background:rgba(0,0,0,.45)}
+.zip h2{font-size:20px;margin:0 0 8px}
+.zip p{margin:8px 0}
+.zip progress{width:100%;height:10px;accent-color:var(--accent)}
+.zip-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.zip-failed{max-height:160px;overflow:auto;margin:4px 0;padding-left:18px;font-size:13px;color:var(--muted)}

@@ -171,10 +171,10 @@ export function favoriteBody(id, fav) {
   return JSON.stringify({ id: String(id), fav: Boolean(fav) });
 }
 
-/** What a favourites response means (fetch with redirect: "manual"): "ok"; "signed-out"
- *  (the Worker said 401, or a readable redirect to Access's login); else "error".
- *  Access's own redirect usually has no CORS headers, so fetch rejects instead: ask /me. */
-export function favoritesOutcome(res) {
+/** What a response from the media host means (fetch with redirect: "manual"): "ok";
+ *  "signed-out" (the Worker said 401, or a readable redirect to Access's login); else "error".
+ *  When Access's redirect has no CORS headers, fetch rejects instead: ask /me. */
+export function accessOutcome(res) {
   if (res.type === "opaqueredirect" || res.status === 401) return "signed-out";
   return res.ok ? "ok" : "error";
 }
@@ -210,5 +210,156 @@ export function serial() {
     const run = tail.then(task);
     tail = run.catch(() => {});
     return run;
+  };
+}
+
+// ---------------------------------------------------------------- downloads
+// One file per item: the full preview, else the card (SPEC.md → Downloads).
+
+export const ZIP_MAX = 500e6; // bytes in one favourites ZIP: built in memory, so kept modest
+const NAME_MAX = 80;
+
+export function downloadPath(x) {
+  return x.media || x.card || null;
+}
+
+/** The item's file with ?download=1: the Worker answers with Content-Disposition: attachment. */
+export function downloadUrl(media, slug, x) {
+  const p = downloadPath(x);
+  return p ? `${itemUrl(media, slug, p)}?download=1` : null;
+}
+
+/** "<YYYY-MM-DD_HHMM>_<original name>.<ext>", the time in the trip's zone: the Worker's
+ *  ?download=1 name and tripmap/export_favs.py's (shared cases: worker/test/download-names.json).
+ *  The name keeps A-Z a-z 0-9 . _ - only (accents dropped, anything else → "_"). */
+export function fileName({ id, orig, t }, tzOffsetMin, ext) {
+  const s = typeof orig === "string" ? orig : "";
+  const dot = s.lastIndexOf(".");
+  const base = (dot > 0 ? s.slice(0, dot) : s).normalize("NFKD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^[._-]+|[._-]+$/g, "").slice(0, NAME_MAX).replace(/[._-]+$/, "") || id;
+  if (typeof t !== "number" || !Number.isFinite(t)) return `${base}.${ext}`;
+  const d = tripClock(t, tzOffsetMin || 0);
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}_${p(d.getUTCHours())}${p(d.getUTCMinutes())}_${base}.${ext}`;
+}
+
+export function downloadName(x, tzOffsetMin) {
+  return fileName(x, tzOffsetMin, (downloadPath(x) || "").split(".").pop() || "jpg");
+}
+
+/** name, or name_2, name_3 … before the extension, not in `used` (case-insensitive, as on
+ *  Windows and macOS). Adds it to `used`. */
+export function uniqueName(name, used) {
+  const dot = name.lastIndexOf(".");
+  const [stem, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ""];
+  let candidate = name;
+  for (let n = 2; used.has(candidate.toLowerCase()); n++) candidate = `${stem}_${n}${ext}`;
+  used.add(candidate.toLowerCase());
+  return candidate;
+}
+
+/** Decimal units, like the R2 dashboard: "840 KB", "8.4 MB", "84 MB", "1.2 GB". */
+export function fmtBytes(n) {
+  if (n < 1e6) return `${Math.max(1, Math.round(n / 1e3))} KB`;
+  if (n < 1e7) return `${(n / 1e6).toFixed(1)} MB`;
+  if (n < 1e9) return `${Math.round(n / 1e6)} MB`;
+  return `${(n / 1e9).toFixed(1)} GB`;
+}
+
+/** What a ZIP of these items would hold: files, bytes (from trip.json's "bytes") and how
+ *  many have no size there (trips built before it existed). */
+export function zipEstimate(items) {
+  const files = items.filter((x) => downloadPath(x));
+  const known = files.filter((x) => Number.isFinite(x.bytes));
+  return { files: files.length, bytes: known.reduce((n, x) => n + x.bytes, 0), unknown: files.length - known.length };
+}
+
+/** Desktop only: a mouse, and room. Phones and tablets save one shot at a time instead. */
+export function isDesktop(matchMedia) {
+  return matchMedia("(hover: hover) and (pointer: fine)").matches && matchMedia("(min-width: 821px)").matches;
+}
+
+const CRC_TABLE = Uint32Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+
+/** CRC-32 (as in ZIP), continued from `crc` so a file can be checked as it streams in. */
+export function crc32(bytes, crc = 0) {
+  let c = (crc ^ 0xffffffff) >>> 0;
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+/** MS-DOS date and time (ZIP's) of a moment in the trip's zone. */
+export function dosDateTime(t, tzOffsetMin) {
+  const d = tripClock(Number.isFinite(t) ? t : 0, tzOffsetMin || 0);
+  const y = d.getUTCFullYear();
+  if (y < 1980) return { date: (1 << 5) | 1, time: 0 };
+  return {
+    date: ((Math.min(y, 2107) - 1980) << 9) | ((d.getUTCMonth() + 1) << 5) | d.getUTCDate(),
+    time: (d.getUTCHours() << 11) | (d.getUTCMinutes() << 5) | (d.getUTCSeconds() >> 1),
+  };
+}
+
+/** A ZIP of stored (uncompressed) files: photos and videos don't compress. add() takes each
+ *  file once it has fully arrived, with its CRC-32 and size, so a file that fails halfway
+ *  leaves nothing behind; finish() returns the whole ZIP as Blob parts, in order. No ZIP64:
+ *  under 4 GB and 65,535 files (ZIP_MAX keeps it far below). */
+export function zipWriter() {
+  const enc = new TextEncoder();
+  const parts = [], central = [];
+  let offset = 0;
+  return {
+    get size() { return offset; },
+    get count() { return central.length; },
+    add(name, data, { crc, size, t, tzOffsetMin }) {
+      const n = enc.encode(name);
+      if (offset + 30 + n.length + size > 0xffffffff || central.length >= 0xffff) throw new RangeError("ZIP too large");
+      const { date, time } = dosDateTime(t, tzOffsetMin);
+      const local = new Uint8Array(30 + n.length);
+      const l = new DataView(local.buffer);
+      l.setUint32(0, 0x04034b50, true); // local file header
+      l.setUint16(4, 20, true); // version needed
+      l.setUint16(6, 0x0800, true); // names are UTF-8
+      l.setUint16(8, 0, true); // stored
+      l.setUint16(10, time, true);
+      l.setUint16(12, date, true);
+      l.setUint32(14, crc >>> 0, true);
+      l.setUint32(18, size, true);
+      l.setUint32(22, size, true);
+      l.setUint16(26, n.length, true);
+      local.set(n, 30);
+      const cd = new Uint8Array(46 + n.length);
+      const c = new DataView(cd.buffer);
+      c.setUint32(0, 0x02014b50, true); // central directory header
+      c.setUint16(4, 20, true); // made by
+      c.setUint16(6, 20, true); // version needed
+      c.setUint16(8, 0x0800, true);
+      c.setUint16(10, 0, true);
+      c.setUint16(12, time, true);
+      c.setUint16(14, date, true);
+      c.setUint32(16, crc >>> 0, true);
+      c.setUint32(20, size, true);
+      c.setUint32(24, size, true);
+      c.setUint16(28, n.length, true);
+      c.setUint32(42, offset, true); // where its local header is
+      cd.set(n, 46);
+      parts.push(local, ...data);
+      central.push(cd);
+      offset += local.length + size;
+    },
+    finish() {
+      const cdSize = central.reduce((n, c) => n + c.length, 0);
+      const end = new Uint8Array(22);
+      const e = new DataView(end.buffer);
+      e.setUint32(0, 0x06054b50, true); // end of central directory
+      e.setUint16(8, central.length, true);
+      e.setUint16(10, central.length, true);
+      e.setUint32(12, cdSize, true);
+      e.setUint32(16, offset, true);
+      return [...parts, ...central, end];
+    },
   };
 }

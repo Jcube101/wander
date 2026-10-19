@@ -14,6 +14,7 @@ How to do things once Wander is set up ([SETUP.md](SETUP.md)). Commands run from
 | Give someone access | `python tripmap/access.py add <slug> <email>` (or `add all <email>` for the all-trips group). Check with `list <slug>`. Fallback: Zero Trust → Access → Rule groups → add the email |
 | Remove someone | `python tripmap/access.py remove <slug> <email>` (asks y/N); add `--revoke` to end their live sessions now (all apps; they can sign back in to trips they're still allowed). Fallback: delete the email from the group; Zero Trust → Users → revoke session. Their favourites file stays (unreachable without access); wipe it if you like ([Favourites](#favourites)) |
 | Wipe someone's favourites | [Favourites](#favourites) |
+| Someone wants originals | They heart the shots on the site; you run `python tripmap/export_favs.py "<trip folder>" --email them@example.com` (yours: no `--email`), check the count and size, answer y, then share the folder however you like ([Originals for someone](#originals-for-someone)) |
 | Change the site | Reference viewer: edit `site/public/`, then `npx wrangler pages deploy site/public --project-name <name>` ([site/README.md](site/README.md)). A builder like Lovable: prompt, then re-publish it there (edits only reach the live domain after publishing) |
 | Change the editor/builder | Edit in the repo → `viewer.html`: refresh the editor page · `build.py`/`publish.py`: used on the next Apply/Scan/Publish · `serve.py`: restart the launcher → run the tests ([CONTRIBUTING.md](CONTRIBUTING.md#run-the-tests)) |
 | Change the Worker | `cd worker && npm test && npx wrangler deploy`, then the checks under [Worker deploys](#worker-deploys) |
@@ -51,9 +52,11 @@ Right after `npx wrangler deploy`, check (and if any check fails, run `npx wrang
 - `https://<media host>/<slug>/trip.json` without cookies → 302/401/403.
 - `https://<media host>/<slug>/favorites` without cookies → 302/401/403, for a GET and for `curl -X POST -H "Origin: <site origin>" -H "Content-Type: text/plain" --data '{"id":"x","fav":true}' …`.
 - `https://<media host>/favs/<slug>/0000.json` → 404.
+- `https://<media host>/<slug>/media/000000000000.jpg?download=1` without cookies → 302/401/403.
+- The cover with `&download=1` added → 200 and no `content-disposition` header (`curl -sI`).
 - A cover listed in `trips.json` (`public/covers/…`) → 200.
 - `curl -sI -H "Origin: <site origin>" https://<media host>/trips.json` shows `access-control-allow-origin: <site origin>` and `access-control-allow-credentials: true`.
-- Signed-in favourites can't be checked from a terminal: in a browser, sign in to a trip, heart a shot, reload (still hearted), un-heart it.
+- Signed-in favourites and downloads can't be checked from a terminal: in a browser, sign in to a trip, heart a shot, reload (still hearted), un-heart it; open a shot → **Download** → the file is named `<date>_<time>_<original name>`.
 
 ## Favourites
 Each signed-in visitor can heart shots in a trip; the Worker keeps one file per person per trip in the bucket ([SPEC.md → Favourites](SPEC.md#favourites)):
@@ -70,6 +73,21 @@ Each signed-in visitor can heart shots in a trip; the Worker keeps one file per 
 - **Wipe a whole trip's favourites:** `rclone purge <remote>:<bucket>/favs/<slug> --s3-no-check-bucket`.
 - **First-time setup** (or a lost salt): [SETUP.md → Favourites](SETUP.md#9-favourites-optional). A new salt orphans every existing file (nobody's favourites are found any more); purge `favs/` afterwards.
 
+## Originals for someone
+Originals never go online. Someone who wants some hearts them on the site (signed in, so the Worker keeps them as their favourites); then:
+
+```
+python tripmap/export_favs.py "<trip folder>" --email friend@example.com --dry-run   # what it would copy
+python tripmap/export_favs.py "<trip folder>" --email friend@example.com             # copy (asks y/N)
+```
+
+- **Whose:** `--email` is the address they sign in with. Without it, your own (`owner_email` in your config).
+- **What:** full-resolution photos and full camera clips (never the `.LRF` proxies), named `<date>_<time>_<original name>` in the trip's zone, like the site's downloads.
+- **Where:** `<Downloads>/<slug>-favourites-<name>/`, or `--out "<folder>"` (not inside the trip folder or the repo). It prints the count and size first, checks the free space and asks y/N.
+- **Safe:** it only reads (one `rclone cat` from R2, the originals from the trip folder; the trip drive must be connected) and writes only that folder. Run it again after an interruption: files already there are skipped.
+- Then share the folder however you like: a USB stick, a shared cloud folder, AirDrop.
+- Skipped with a note: archived shots, favourites the local trip data doesn't know, and originals that are missing (moved, or on another drive).
+
 ## Archive notes
 - Archived shots' previews are deleted from R2 on Publish, but a signed-in viewer's browser may keep cached copies for up to a week (`private, max-age=604800`).
 - First publish after archiving (or any time in doubt): run `--dry-run` and check the delete list.
@@ -85,6 +103,8 @@ Each signed-in visitor can heart shots in a trip; the Worker keeps one file per 
 - **Publish: "WARNING: R2 storage …"** → the bucket is projected over 8 GB (or over the 10 GB free tier, which costs a few cents/GB/month). The publish still ran. Free space by archiving shots you don't need, or rebuild a trip's previews smaller: add `--crf 30` and/or `--video-height 540` to the build options (in `_tripmap/build_args.json` for the editor's Scan), delete that trip's `_tripmap/media/*.mp4` so they're rebuilt, Scan, then Publish. `--dry-run` shows the projected size first.
 - **Publish: "couldn't check R2 storage"** → only the size check failed; the publish carried on. Retry later.
 - **Publish: `CreateBucket ... 403`** → an rclone call is missing `--s3-no-check-bucket`.
+- **Favourites ZIP says "size unknown"** → the trip's `trip.json` predates `bytes`: in the editor, **Apply to map** → **Publish**.
+- **`export_favs.py`: "has no favourites in this trip"** → check it's the email they sign in with, and that they hearted shots in this trip. **"still the example"** → put your sign-in email in `owner_email` in your config.
 - **`access.py`: "REFUSED: …"** → a group holds something other than emails, or a policy something other than rule groups with Allow (e.g. Everyone, a service token, an IP range, Bypass). Fix it in the dashboard; the script won't write around it.
 - **`access.py`: "several Access apps cover <slug>"** → two apps share a destination; delete or fix one in the dashboard (the script never deletes).
 - **`access.py`: "rule group '… – All trips' not found"** → create it in Zero Trust ([SETUP.md step 6](SETUP.md#6-cloudflare-access)), named with your `access.prefix` and an en dash.

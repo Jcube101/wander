@@ -7,8 +7,8 @@ The first file found wins:
   2. wander.config.json in the repo root (gitignored)
   3. ~/.wander/config.json  (%USERPROFILE%\\.wander\\config.json on Windows)
 
-Start from wander.config.example.json in the repo root. Only publish.py and
-access.py need it; build.py and the editor run without one.
+Start from wander.config.example.json in the repo root. Only publish.py,
+access.py and export_favs.py need it; build.py and the editor run without one.
 
     python config.py      # show which file is used and what it says
 """
@@ -34,6 +34,7 @@ HOST = re.compile(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])
 BUCKET = re.compile(r"[a-z0-9][a-z0-9-]{1,61}[a-z0-9]")
 REMOTE = re.compile(r"[\w.-]+")
 DURATION = re.compile(r"\d+(h|m)")
+EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
 
 
 class ConfigError(Exception):
@@ -51,6 +52,7 @@ class Config:
     app_session: str     # Access app session length, e.g. 24h
     policy_session: str  # Access policy session length, e.g. 730h
     contact: str         # build.py --contact default ("Request original" link)
+    owner_email: str = ""  # whose favourites export_favs.py exports by default, or ""
 
     @property
     def remote(self):
@@ -109,11 +111,15 @@ def parse(data, path):
     contact = _get(data, "defaults.contact", "") or ""
     if not isinstance(contact, str):
         problems.append(f"defaults.contact should be text (got {contact!r})")
+    owner = _get(data, "owner_email", "") or ""
+    if not isinstance(owner, str) or (owner and not EMAIL.fullmatch(owner.strip())):
+        problems.append(f"owner_email should be the email you sign in with, like you@example.com (got {owner!r})")
+        owner = ""
     if problems:
         raise ConfigError(f"{path}:\n  " + "\n  ".join(problems))
     return Config(path=Path(path), media_host=host, rclone_remote=remote, bucket=bucket,
                   site_url=site.rstrip("/"), access_prefix=prefix.strip(), app_session=app_s,
-                  policy_session=pol_s, contact=contact)
+                  policy_session=pol_s, contact=contact, owner_email=owner.strip())
 
 
 def load(required=True):
@@ -137,7 +143,8 @@ def main():
         print(e)
         return 1
     print(f"Config: {cfg.path}")
-    for k in ("media_host", "remote", "site_url", "access_prefix", "app_session", "policy_session", "contact"):
+    for k in ("media_host", "remote", "site_url", "access_prefix", "app_session", "policy_session", "contact",
+              "owner_email"):
         print(f"  {k}: {getattr(cfg, k)!r}")
     return 0
 
