@@ -42,7 +42,11 @@ import config  # noqa: E402
 LONG = "Cache-Control: public, max-age=604800"
 NOCACHE = "Cache-Control: no-cache"
 DATA_FILES = ("trip.json",)
+# The only folders (inside <slug>/) a publish ever deletes from. Everything else in
+# the bucket, e.g. people's favourites under favs/ (the Worker's), is never touched.
 PREVIEW_DIRS = ("thumbs/", "cards/", "media/")
+# Names the Worker uses for itself, so they can't be a trip's top-level folder.
+RESERVED_SLUGS = {"favs", "auth", "public", "me"}
 MAX_DELETE_SHARE = 0.20
 # What Access answers a visitor without a cookie. The Worker itself never
 # redirects or refuses trip.json, so these mean the trip's Access app exists.
@@ -111,7 +115,7 @@ def remote_previews(dst):
     files = {}
     for line in out.splitlines():
         size, _, path = line.strip().partition(";")
-        if path.startswith(PREVIEW_DIRS):
+        if path.startswith(PREVIEW_DIRS) and ".." not in path.split("/"):
             files[path] = int(size) if size.isdigit() else 0
     return dict(sorted(files.items()))
 
@@ -192,6 +196,9 @@ def main():
     slug = trip.get("slug")
     if not slug:
         sys.exit("trip.json has no slug. Re-run the build.")
+    if slug in RESERVED_SLUGS:
+        sys.exit(f"ERROR: '{slug}' can't be a trip's slug (the Worker uses it). "
+                 f"Rebuild with another --slug.")
     if args.allow_unprotected:
         log(f"WARNING: skipping the Access check; {slug} may be visible to anyone.")
     else:

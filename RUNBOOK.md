@@ -12,7 +12,8 @@ How to do things once Wander is set up ([SETUP.md](SETUP.md)). Commands run from
 | Hide a shot | Select → **Archive** (A) → **Apply to map** → **Publish**. Undo: **Archived** filter → select → **Restore** (Shift+A) → Apply → Publish |
 | Check a publish first | `python tripmap/publish.py "<trip folder>" --dry-run` → upload count + delete list, nothing changed |
 | Give someone access | `python tripmap/access.py add <slug> <email>` (or `add all <email>` for the all-trips group). Check with `list <slug>`. Fallback: Zero Trust → Access → Rule groups → add the email |
-| Remove someone | `python tripmap/access.py remove <slug> <email>` (asks y/N); add `--revoke` to end their live sessions now (all apps; they can sign back in to trips they're still allowed). Fallback: delete the email from the group; Zero Trust → Users → revoke session |
+| Remove someone | `python tripmap/access.py remove <slug> <email>` (asks y/N); add `--revoke` to end their live sessions now (all apps; they can sign back in to trips they're still allowed). Fallback: delete the email from the group; Zero Trust → Users → revoke session. Their favourites file stays (unreachable without access); wipe it if you like ([Favourites](#favourites)) |
+| Wipe someone's favourites | [Favourites](#favourites) |
 | Change the site | Reference viewer: edit `site/public/`, then `npx wrangler pages deploy site/public --project-name <name>` ([site/README.md](site/README.md)). A builder like Lovable: prompt, then re-publish it there (edits only reach the live domain after publishing) |
 | Change the editor/builder | Edit in the repo → `viewer.html`: refresh the editor page · `build.py`/`publish.py`: used on the next Apply/Scan/Publish · `serve.py`: restart the launcher → run the tests ([CONTRIBUTING.md](CONTRIBUTING.md#run-the-tests)) |
 | Change the Worker | `cd worker && npm test && npx wrangler deploy`, then the checks under [Worker deploys](#worker-deploys) |
@@ -36,7 +37,9 @@ The Access app must exist **before** Publish; Access is the only gate. In Claude
    - Allow policy `<prefix> – <Trip> viewers` = `<prefix> – <Trip> crew` OR `<prefix> – All trips` (session from `access.policySession`).
    - Self-hosted app `<prefix> – <Title>`, destinations `<media host>/<slug>` and `<media host>/auth/<slug>`; One-time PIN only; App Launcher hidden; session from `access.appSession`.
 
-   It ends with the publish guard's check (`302/401/403` = protected). Then `access.py add <slug> <email>` for each crew member. `--trip <Name>` overrides `<Trip>`. Needs the API token ([SETUP.md step 6](SETUP.md#6-cloudflare-access)); without it, `access.py` prints how to make one. Fallback: create the same three by hand in Zero Trust.
+   It ends with the app's AUD tag and the publish guard's check (`302/401/403` = protected). Then `access.py add <slug> <email>` for each crew member. `--trip <Name>` overrides `<Trip>`. Needs the API token ([SETUP.md step 6](SETUP.md#6-cloudflare-access)); without it, `access.py` prints how to make one. Fallback: create the same three by hand in Zero Trust.
+
+   **Favourites** (if you use them): add the line `setup` printed, `"<slug>" = "<AUD tag>"`, to `ACCESS_AUD` in `worker/wrangler.toml` (`access.py list <slug>` shows the AUD again), then deploy the Worker and run the [checks](#worker-deploys). Until then the trip works, but its hearts are hidden (`/<slug>/favorites` answers 500).
 6. **Publish** from the editor. `publish.py` refuses if step 5 is missing.
 7. **Check**
    - `curl -s -o /dev/null -w "%{http_code}\n" https://<media host>/<slug>/trip.json` → 302/401/403. **Never 200.**
@@ -46,8 +49,26 @@ The Access app must exist **before** Publish; Access is the only gate. In Claude
 Right after `npx wrangler deploy`, check (and if any check fails, run `npx wrangler rollback` first, then investigate):
 - `https://<media host>/trips.json` → 200 (once a trip is published).
 - `https://<media host>/<slug>/trip.json` without cookies → 302/401/403.
+- `https://<media host>/<slug>/favorites` without cookies → 302/401/403, for a GET and for `curl -X POST -H "Origin: <site origin>" -H "Content-Type: text/plain" --data '{"id":"x","fav":true}' …`.
+- `https://<media host>/favs/<slug>/0000.json` → 404.
 - A cover listed in `trips.json` (`public/covers/…`) → 200.
 - `curl -sI -H "Origin: <site origin>" https://<media host>/trips.json` shows `access-control-allow-origin: <site origin>` and `access-control-allow-credentials: true`.
+- Signed-in favourites can't be checked from a terminal: in a browser, sign in to a trip, heart a shot, reload (still hearted), un-heart it.
+
+## Favourites
+Each signed-in visitor can heart shots in a trip; the Worker keeps one file per person per trip in the bucket ([SPEC.md → Favourites](SPEC.md#favourites)):
+
+- **Where:** `favs/<slug>/<sha256(salt + lowercase email)>.json`, holding `{"version":1,"ids":[…],"updated":…}`. No email in it. The salt is the Worker secret `FAVS_SALT`; Cloudflare never shows a secret again, so keep your own copy in `~/.wander/favs-salt` (outside the repo; never paste it anywhere).
+- **Never served, never published over:** the Worker answers 404 for any `favs/…` path, and `publish.py` only ever deletes inside `<slug>/thumbs|cards|media/`.
+- **Archived shots** drop out of everyone's favourites (a GET leaves them out; the person's next change prunes them).
+- **Wipe one person's favourites in a trip** (e.g. after removing them). The file name from their email:
+  ```
+  python -c "import hashlib,pathlib,sys; s=(pathlib.Path.home()/'.wander'/'favs-salt').read_text().strip(); print(hashlib.sha256((s+sys.argv[1].lower()).encode()).hexdigest())" friend@example.com
+  rclone deletefile <remote>:<bucket>/favs/<slug>/<that hash>.json --s3-no-check-bucket
+  ```
+  Every trip of theirs: `rclone lsf <remote>:<bucket>/favs --s3-no-check-bucket -R --include "*/<that hash>.json"`, then `deletefile` each.
+- **Wipe a whole trip's favourites:** `rclone purge <remote>:<bucket>/favs/<slug> --s3-no-check-bucket`.
+- **First-time setup** (or a lost salt): [SETUP.md → Favourites](SETUP.md#9-favourites-optional). A new salt orphans every existing file (nobody's favourites are found any more); purge `favs/` afterwards.
 
 ## Archive notes
 - Archived shots' previews are deleted from R2 on Publish, but a signed-in viewer's browser may keep cached copies for up to a week (`private, max-age=604800`).
@@ -70,4 +91,7 @@ Right after `npx wrangler deploy`, check (and if any check fails, run `npx wrang
 - **Site shows "This trip is private" for someone who should see it** → `access.py list <slug>` and check their exact email; ask them to sign out (`https://<media host>/cdn-cgi/access/logout`) and back in.
 - **Site can't load trips at all** → its origin isn't in the Worker's `SITE_ORIGINS` (check `access-control-allow-origin`, see [Worker deploys](#worker-deploys)), or it's on a different registrable domain than the media host.
 - **Images missing but trip loads** → something added `crossorigin` to `<img>`/`<video>` in the site.
+- **No hearts on a trip** → `curl -s https://<media host>/<slug>/favorites` while signed in shows why: "Not configured…" (500) means the trip isn't in `ACCESS_AUD`, or `ACCESS_TEAM_DOMAIN`/`FAVS_SALT` is missing (New trip, step 5 → Favourites).
+- **Hearts always say "sign in again"** although the trip loads → the Worker rejects the Access token (401). Check the trip's line in `ACCESS_AUD` against `access.py list <slug>` (AUD tag) and `ACCESS_TEAM_DOMAIN` against your Zero Trust team domain; redeploy.
+- **Favourites POST fails before reaching the Worker** → the site sent `Content-Type: application/json` or a custom header, which needs a CORS preflight that Access refuses (LEARNINGS). Send `text/plain`.
 - **Video won't seek** → Worker Range handling; test with `curl -H "Range: bytes=0-99" -I <url>` while signed in.

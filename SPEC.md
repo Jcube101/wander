@@ -31,12 +31,14 @@ R2 bucket (e.g. "trip-media")  — private, no public domain
   trips.json                       list of trips (public)
   public/covers/<slug>(-card).jpg  landing-page covers (public)
   <slug>/trip.json|thumbs|cards|media   trip content (protected)
+  favs/<slug>/<hash>.json          each visitor's favourites (written by the Worker; never served as files)
         │
         │  R2 binding
         ▼
 Worker (e.g. "wander-media") on media.example.com
   /trips.json, /public/*     public; CORS with credentials for SITE_ORIGINS, "*" without for anyone else
   /<slug>/...                behind Cloudflare Access app for that trip
+  /<slug>/favorites          the same app; GET/POST this visitor's own favourites (Access token verified)
   /auth/<slug>?return=URL    behind the same Access app; 302s back to a SITE_ORIGINS origin only
   /me                        email from the Access cookie (display only)
         ▲
@@ -55,10 +57,10 @@ wander.example.com  — any static site (the live example is built with Lovable)
 | **launcher** (`launcher.py`) | The owner's machine | Writes the trip folder's `.bat`/`.sh` launcher with this repo's path |
 | **tripmap publish** (`publish.py`) | The owner's machine | `_tripmap/` → R2 via rclone |
 | **R2 bucket** | Cloudflare, private, no public domain | Layout in the diagram above |
-| **Worker** (`worker/`) | The media host | Serves an allow-list of R2 keys; settings in `wrangler.toml` (`SITE_ORIGINS`) |
+| **Worker** (`worker/`) | The media host | Serves an allow-list of R2 keys and each visitor's favourites; settings in `wrangler.toml` (`SITE_ORIGINS`; for favourites `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` and the secret `FAVS_SALT`) |
 | **Cloudflare Access** | Zero Trust, in front of the Worker | Decides who sees which trip |
 | **Site** | The site host, same registrable domain as the media host | Consumes the [data contract](#data-contract--build-your-own-site) |
-| **Reference viewer** (`site/public/`) | Any static host, e.g. Cloudflare Pages | One such site: trip list with lock badges; per trip a map, day filter, gallery, viewer and sign-in. Media host set in `config.js`, overridden by a gitignored `config.local.js`; no build step, no browser storage |
+| **Reference viewer** (`site/public/`) | Any static host, e.g. Cloudflare Pages | One such site: trip list with lock badges; per trip a map, day filter, gallery, viewer, favourites (hearts + a "Favourites (n)" filter) and sign-in. Media host set in `config.js`, overridden by a gitignored `config.local.js`; no build step, no browser storage |
 
 ## Functional requirements
 
@@ -207,14 +209,17 @@ Before the plan, it requests `<slug>/trip.json` with no cookies and follows no r
 
 Never uploaded: anything `trip.json` doesn't reference, including `trip.js`, `index.html`, `build_args.json`, `build_errors.txt`, `*.part.mp4` and archived shots' previews. Every rclone call has `--s3-no-check-bucket`.
 
+Never deleted: anything outside `<slug>/thumbs/`, `<slug>/cards/` and `<slug>/media/` (paths with a `..` segment included), so people's favourites under `favs/` are never touched. The slugs `favs`, `auth`, `public` and `me` are refused (the Worker uses those names). The storage check counts the whole bucket, favourites included (a few KB).
+
 ### Worker (`worker/src/index.js`)
 
 | Behaviour | Rule |
 |---|---|
-| Methods | GET, HEAD, OPTIONS (preflight 204); others 405 |
+| Methods | GET, HEAD, OPTIONS (preflight 204); POST only on `/<slug>/favorites`; others 405 |
 | Path safety | Any `%`, `..` or `//` → 404 |
-| Allow-list | `trips.json`; `public/…`; `<slug>/trip.json`, `<slug>/thumbs|cards/<id>.jpg`, `<slug>/media/<id>.jpg|mp4`. Everything else 404; never lists |
+| Allow-list | `trips.json`; `public/…`; `<slug>/trip.json`, `<slug>/thumbs|cards/<id>.jpg`, `<slug>/media/<id>.jpg|mp4`. Everything else 404; never lists. `favs/…` is always 404 (checked before the allow-list) |
 | `/auth/<slug>?return=`, `/me` | See [Worker endpoints](#worker-endpoints). `/me` reads the `CF_Authorization` cookie (null if missing/expired) |
+| `/<slug>/favorites` | See [Favourites](#favourites). Identity only from the `Cf-Access-Jwt-Assertion` header Access adds: RS256, signed by a key from `<ACCESS_TEAM_DOMAIN>/cdn-cgi/access/certs` (cached 1 h; refetched at most once a minute for an unknown key id), `iss` = `ACCESS_TEAM_DOMAIN`, `aud` contains `ACCESS_AUD[<slug>]`, not expired, has `email`. Never the cookie, never anything the page sends. POST needs an `Origin` in `SITE_ORIGINS` (CSRF). Stored at `favs/<slug>/<sha256(FAVS_SALT + lowercase email)>.json` as `{"version":1,"ids":[…],"updated":…}`; no email in R2 or logs. A trip's item ids are read from its `trip.json` and cached 60 s per isolate. Read-modify-write, last write wins; removing the last favourite deletes the file. Missing settings for a trip → 500 |
 | Range | 206 with `content-range`, incl. suffix ranges |
 | Conditional | `If-None-Match` etc. → 304 |
 | Caching | Public: data `no-cache`, images 1 h. Protected: `private`, data `no-cache`, media 1 week |
@@ -234,7 +239,7 @@ Manages the above through the Cloudflare API, so onboarding needs no dashboard c
 | `setup <slug> "<Title>"` | Crew group `<prefix> – <Trip> crew`, reusable policy `<prefix> – <Trip> viewers`, app `<prefix> – <Title>`. `<Trip>` = title minus a trailing year (`--trip` overrides). Names use an en dash (U+2013) |
 | `add <slug\|all> <email>` | Add to the trip's crew, or to `<prefix> – All trips` |
 | `remove <slug\|all> <email>` | Remove; `--revoke` also ends that person's Access sessions (`revoke_user`) |
-| `list <slug\|all>` | Members; for a slug also the app's destinations, policy and session lengths |
+| `list <slug\|all>` | Members; for a slug also the app's destinations, policy, session lengths and AUD tag (for the Worker's `ACCESS_AUD`; `setup` prints it too) |
 
 | Rule | Behaviour |
 |---|---|
@@ -260,6 +265,7 @@ What a site needs to do:
 2. Trip page: fetch `<slug>/trip.json` with credentials. If it fails, show "This trip is private" and a **Sign in** link to `/auth/<slug>?return=<this page's URL>` ([Worker endpoints](#worker-endpoints)).
 3. Show items on a map (`lat`/`lon`), by day (`days`, `day`), in time order (`t`), with `thumb`/`card`/`media` as image and video sources.
 4. Follow the [client rules](#client-rules) and host the site on the same registrable domain as the media host, with its origin in the Worker's `SITE_ORIGINS`.
+5. Optional: let each visitor keep their own [favourites](#favourites) (a heart per item, a filter).
 
 Base: `https://<media host>`, e.g. `https://media.example.com`. All paths below are relative to it unless noted.
 
@@ -310,12 +316,47 @@ Sorted newest trip first. `cover` ≤640px, `coverImage` 1600px (falls back to `
 ### Worker endpoints
 - `GET /me` → `{ "email": string|null }` (from the Access cookie; display only).
 - `GET /auth/<slug>?return=<url>` → behind the trip's Access app; 302 to `return` if its origin is exactly one of `SITE_ORIGINS` (https), else to `<first site origin>/<slug>`. The site adds `?signedin=1` to `return` to know the visitor just signed in.
+- `GET|POST /<slug>/favorites` → this visitor's favourites in the trip ([Favourites](#favourites)).
 - Logout: `/cdn-cgi/access/logout` (Cloudflare).
+
+### Favourites
+Each signed-in visitor's own favourite items in a trip, synced across their devices. Private: nobody sees anyone else's (not even counts). Behind the trip's Access app like `trip.json`; the Worker takes the visitor's email from the token Access adds, never from the page.
+
+**Read:** `GET /<slug>/favorites` → `200 {"ids": ["<item id>", …]}`. Only ids still in `trip.json` (a shot archived later drops out). Order is not significant. `[]` when there are none.
+
+**Change one:** `POST /<slug>/favorites` with the body `{"id": "<item id>", "fav": true}` (or `false` to remove) → `200` and the updated `{"ids": […]}`. Setting what's already set is fine (200, no change).
+
+The POST must be a CORS "simple request", because Access refuses the preflight any other request needs:
+```js
+fetch(`${MEDIA}/${slug}/favorites`, {
+  method: "POST",
+  credentials: "include",
+  redirect: "manual",
+  headers: { "Content-Type": "text/plain;charset=UTF-8" },   // not application/json: that needs a preflight
+  body: JSON.stringify({ id, fav: true }),
+});
+```
+No other headers. The `Origin` must be in the Worker's `SITE_ORIGINS` (browsers send it on their own).
+
+| Response | Meaning | What a site does |
+|---|---|---|
+| `200` `{"ids":[…]}` | Done | Take this list as the truth |
+| `type: "opaqueredirect"` (with `redirect: "manual"`), or `401` | Signed out: the Access session ran out, or no valid token | Undo the change; show the usual sign-in link (`/auth/<slug>?return=…`) |
+| fetch rejects (`TypeError`) | Offline, or Access redirected without CORS headers | Undo; `GET /me`: `email` null → signed out (as above), else "couldn't save, try again" |
+| `400` | Not JSON, wrong shape, or an id that isn't in this trip | Undo; don't retry |
+| `403` | `Origin` not in `SITE_ORIGINS` | Undo; fix the Worker's settings |
+| `409` | Already 2,000 favourites in this trip | Undo; say so |
+| `413` / `415` | Body over 1 KB / not `text/plain` or `application/json` | Undo |
+| `404` | No such trip | — |
+| `500` / `503` | Favourites not set up for this trip on this media host / couldn't check the sign-in | Hide hearts (on `GET`) or undo and say "try again" |
+
+Show changes at once and undo them if the request fails. Send one POST at a time per visitor (queue taps), since each POST rewrites the visitor's whole list.
 
 ### Client rules
 - `fetch(..., { credentials: 'include' })` for everything on the media host.
 - No `crossorigin` attribute on `<img>`/`<video>` (it would drop the cookie).
-- Never persist trip data in browser storage.
+- Never persist trip data in browser storage (favourites included: keep them in memory, the Worker has them).
+- Writes (favourites) are simple requests: `text/plain` body, no custom headers.
 
 ## Non-functional requirements
 
@@ -323,7 +364,8 @@ Sorted newest trip first. `cover` ≤640px, `coverImage` 1600px (falls back to `
 |---|---|
 | Originals never leave the disk | Only previews are built and uploaded |
 | Raw paths never uploaded | `publish.py` excludes `trip.js`/`index.html`; Worker refuses them |
-| No database, ever | Identity = Access cookie; data = static JSON in R2 |
+| No database, ever | Identity = Access cookie; data = static JSON in R2 (favourites too: one small file per person per trip) |
+| Favourites stay private | One file per person per trip, named by a salted hash of their email (salt = Worker secret); no email stored or logged; never served as a file; only the owner's verified token reads or writes it |
 | Free tier only | R2 ≤ 10 GB (~2.5 GB/trip); Cloudflare free plans |
 | One copy of the code | Runs from this repo; trip folders hold only a launcher |
 | Client rules | See [Client rules](#client-rules) |
@@ -335,7 +377,8 @@ Sorted newest trip first. `cover` ≤640px, `coverImage` 1600px (falls back to `
 
 - Public sharing of originals
 - Serving originals online, even to the crew. Originals never leave the disk; anyone who wants one asks the owner.
-- In-browser editing on the live site
+- In-browser editing on the live site (favourites are each visitor's own bookmarks, not edits to the trip)
+- Shared or public favourites (v1: nobody sees anyone else's)
 - A user database or our own auth
 - Subdomains per trip
 

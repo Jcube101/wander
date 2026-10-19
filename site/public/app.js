@@ -13,11 +13,15 @@ const esc = W.escapeHtml;
 const view = $("#view");
 document.title = TITLE;
 $("#brand").textContent = TITLE;
+const HEART = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.6-4.6-9.4-9.4C1.4 7.9 3.6 4.5 7 4.5c2 0 3.6 1.1 5 3 1.4-1.9 3-3 5-3 3.4 0 5.6 3.4 4.4 6.6-1.8 4.8-9.4 9.4-9.4 9.4z"/></svg>';
 
-function notice(html) {
+let noticeTimer;
+function notice(html, hideAfterMs) {
   const n = $("#notice");
+  clearTimeout(noticeTimer);
   n.innerHTML = html;
   n.hidden = false;
+  if (hideAfterMs) noticeTimer = setTimeout(() => { n.hidden = true; }, hideAfterMs);
 }
 
 try {
@@ -122,6 +126,11 @@ async function tripPage(slug) {
   const url = (p) => W.itemUrl(MEDIA, slug, p);
   const items = W.itemsFor(trip.items);
   const byId = new Map(items.map((x) => [x.id, x]));
+  // Favourites: this visitor's own, kept by the Worker. null = not offered (the media
+  // host has none, or they aren't set up for this trip): no hearts, no filter.
+  let favs = null, favsSending = 0;
+  const favUrl = W.favoritesUrl(MEDIA, slug);
+  const sendFav = W.serial();
 
   view.innerHTML = `<section class="trip-head"><a href="/" class="muted">← All trips</a>
       <h1>${esc(trip.title)}</h1><p>${esc(W.fmtRange(trip.start, trip.end))} · ${esc(W.tripSummary(trip))}</p></section>
@@ -165,28 +174,41 @@ async function tripPage(slug) {
   const chips = $("#days");
   const days = [{ key: "all", label: "All days", sub: `${items.length} shots` },
     ...(trip.days || []).map((d) => ({ key: d.key, label: `Day ${d.n}`, sub: `${W.fmtDay(d.key)} · ${d.count}` }))];
-  chips.innerHTML = days.map((d) =>
-    `<button class="chip" data-day="${esc(d.key)}" aria-pressed="false">${esc(d.label)}<small>${esc(d.sub)}</small></button>`).join("");
+  const chip = (d) =>
+    `<button class="chip" data-day="${esc(d.key)}" aria-pressed="false">${esc(d.label)}<small>${esc(d.sub)}</small></button>`;
+  chips.innerHTML = chip(days[0]) +
+    `<button class="chip fav-chip" data-day="favs" aria-pressed="false" hidden>${HEART}<span id="fav-label"></span><small>Only you see these</small></button>` +
+    days.slice(1).map(chip).join("");
   chips.addEventListener("click", (e) => {
     const b = e.target.closest("[data-day]");
     if (b) setDay(b.dataset.day);
   });
   const grid = $("#grid");
   grid.addEventListener("click", (e) => {
+    const h = e.target.closest("[data-fav]");
+    if (h) return toggleFav(h.dataset.fav);
     const b = e.target.closest("[data-id]");
     if (b) openLb(b.dataset.id);
   });
 
-  function setDay(day) {
-    current = W.itemsFor(items, day);
-    for (const b of chips.querySelectorAll("[data-day]")) b.setAttribute("aria-pressed", String(b.dataset.day === day));
-    grid.innerHTML = current.map((x) => {
-      const src = url(x.card || x.thumb);
-      return `<button class="tile" data-id="${esc(x.id)}" aria-label="${esc(W.itemCaption(x, tz))}">
+  // A tile is the picture (opens the viewer) plus a heart; buttons can't nest.
+  function tile(x) {
+    const src = url(x.card || x.thumb);
+    return `<div class="tile" data-id="${esc(x.id)}">
+      <button class="open" aria-label="${esc(W.itemCaption(x, tz))}">
         ${src ? `<img src="${esc(src)}" alt="" loading="lazy">` : ""}
         <span class="t">${esc(W.fmtTime(x.t, tz))}</span>${x.type === "video" ? `<span class="v">▶ ${esc(W.fmtDuration(x.dur))}</span>` : ""}
-      </button>`;
-    }).join("") || '<p class="muted">Nothing on this day.</p>';
+      </button>
+      <button class="heart" data-fav="${esc(x.id)}" aria-label="Favourite" aria-pressed="${favs?.has(x.id) ? "true" : "false"}"${favs ? "" : " hidden"}>${HEART}</button>
+    </div>`;
+  }
+
+  function setDay(day) {
+    current = day === "favs" ? W.favoriteItems(items, favs || new Set()) : W.itemsFor(items, day);
+    for (const b of chips.querySelectorAll("[data-day]")) b.setAttribute("aria-pressed", String(b.dataset.day === day));
+    grid.innerHTML = current.map(tile).join("") || (day === "favs"
+      ? '<p class="muted">No favourites yet. Tap the ♡ on a photo or video to add it. Only you see yours.</p>'
+      : '<p class="muted">Nothing on this day.</p>');
     grid.scrollTop = 0;
     cluster.clearLayers();
     const placed = current.filter((x) => markers.has(x.id));
@@ -195,6 +217,67 @@ async function tripPage(slug) {
     else map.setView([20, 0], 2);
   }
   setDay("all");
+
+  // Favourites: hearts on tiles and in the viewer, and the "Favourites (n)" filter.
+  // In that filter, un-hearting keeps the tile until the filter is picked again,
+  // so a mis-tap is one tap to undo.
+  const lbFav = $("#lb-fav");
+  lbFav.innerHTML = HEART;
+  lbFav.onclick = () => toggleFav(lbFav.dataset.fav);
+  function renderFavs() {
+    chips.querySelector('[data-day="favs"]').hidden = !favs;
+    if (!favs) return;
+    $("#fav-label").textContent = W.favoritesLabel(favs.size);
+    for (const h of document.querySelectorAll("[data-fav]")) {
+      h.hidden = false;
+      h.setAttribute("aria-pressed", String(favs.has(h.dataset.fav)));
+    }
+  }
+  // A favourites request: {outcome: "ok" | "signed-out" | "error", data}. A fetch that fails
+  // outright is either offline or Access sending a signed-out visitor to its login (a
+  // cross-site redirect without CORS headers, which the page can't read), so /me (public:
+  // the email in the Access cookie) tells the two apart.
+  async function favRequest(init = {}) {
+    let r;
+    try {
+      r = await fetch(favUrl, { ...init, credentials: "include", redirect: "manual" });
+    } catch {
+      const signedIn = await getJson(W.joinUrl(MEDIA, "me")).then((me) => Boolean(me.email), () => true);
+      return { outcome: signedIn ? "error" : "signed-out" };
+    }
+    const outcome = W.favoritesOutcome(r);
+    return { outcome, data: outcome === "ok" ? await r.json() : null };
+  }
+  function toggleFav(id) {
+    if (!favs || !id) return;
+    const fav = !favs.has(id);
+    favs = W.withFavorite(favs, id, fav); // show it at once; undone below if the save fails
+    favsSending++;
+    renderFavs();
+    sendFav(async () => {
+      const { outcome, data } = await favRequest({
+        method: "POST", headers: { "content-type": "text/plain;charset=UTF-8" }, body: W.favoriteBody(id, fav),
+      });
+      if (outcome !== "ok") throw Object.assign(new Error(outcome), { outcome });
+      return data;
+    }).then((data) => {
+      if (--favsSending === 0) favs = W.favoriteIds(data, new Set(byId.keys())); // the Worker's list wins
+    }, (e) => {
+      favsSending--;
+      favs = W.withFavorite(favs, id, !fav);
+      if (e.outcome === "signed-out") {
+        notice(`Your sign-in has run out, so favourites can't be saved. <a href="${esc(W.signInUrl(MEDIA, slug, location.href))}">Sign in again</a>`);
+      } else {
+        notice("Couldn't save that favourite. Check your connection and try again.", 6000);
+      }
+    }).finally(renderFavs);
+  }
+  favRequest().then(({ outcome, data }) => {
+    if (outcome === "error") return; // none on this media host, not set up for this trip, or offline
+    // Signed out (the session ran out since the trip loaded): empty hearts; a tap says to sign in.
+    favs = outcome === "ok" ? W.favoriteIds(data, new Set(byId.keys())) : new Set();
+    renderFavs();
+  }, () => {});
 
   // Lightbox
   const lb = $("#lb"), stage = $("#lb-stage"), onmap = $("#lb-onmap");
@@ -217,6 +300,9 @@ async function tripPage(slug) {
       : `<img src="${esc(url(x.media || x.card || x.thumb))}" alt="${esc(W.itemCaption(x, tz))}">`;
     $("#lb-caption").textContent = W.itemCaption(x, tz) + (x.type === "video" && x.dur ? ` · ${W.fmtDuration(x.dur)}` : "");
     onmap.hidden = !markers.has(x.id);
+    lbFav.dataset.fav = x.id;
+    lbFav.hidden = !favs;
+    lbFav.setAttribute("aria-pressed", String(Boolean(favs?.has(x.id))));
     for (const t of grid.querySelectorAll(".tile.cur")) t.classList.remove("cur");
     grid.querySelector(`[data-id="${CSS.escape(x.id)}"]`)?.classList.add("cur");
   }

@@ -28,7 +28,7 @@ The procedure is **RUNBOOK.md → "New trip"**. Read it now and follow it; it is
 
 ## Step 5: Access (after the user's yes)
 5. Run `python tripmap/access.py setup <slug> "<Title>" --dry-run` (add `--trip "<Trip>"` if `<Trip>` isn't the title minus its year). Show the user the plan verbatim and ask whether to apply it.
-   - Only on an explicit yes: run the same command with `--yes` instead of `--dry-run`, and report its output, including the final `Access check:` line.
+   - Only on an explicit yes: run the same command with `--yes` instead of `--dry-run`, and report its output, including the `App AUD tag:` line and the final `Access check:` line.
    - If it prints the token instructions (exit 2), pass them on and skip this step; it goes on the checklist instead.
    - `REFUSED` or `ERROR`: report it and stop; don't work around it.
    - Don't add crew members here; the user adds them with `access.py add`.
@@ -37,6 +37,7 @@ The procedure is **RUNBOOK.md → "New trip"**. Read it now and follow it; it is
 Fill in the real `<Title>`, `<Trip>`, `<slug>` and media host. Take the wording from runbook steps 4–7:
 
 - [ ] **Crew:** `python tripmap/access.py add <slug> <email>` for each person (`list <slug>` to check). If step 5 was skipped: `access.py setup <slug> "<Title>" --dry-run`, then without `--dry-run`.
+- [ ] **Favourites** (if the Worker has them set up): add `"<slug>" = "<AUD tag>"` to `ACCESS_AUD` in `worker/wrangler.toml`, then `cd worker && npm test && npx wrangler deploy` and the Worker-deploy checks (RUNBOOK → Worker deploys). Until then the trip has no hearts.
 - [ ] **4. Edit + full build:** start the trip folder's launcher → fix things → Apply to map → **Scan for new files**.
 - [ ] **6. Publish** from the editor (it refuses until step 5 is done).
 - [ ] **7. Check:** `curl -s -o /dev/null -w "%{http_code}\n" https://<media host>/<slug>/trip.json` → 302/401/403, never 200; then incognito sign-in test.

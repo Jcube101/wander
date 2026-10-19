@@ -110,6 +110,47 @@ test("config.local.js overrides config.js key by key; a missing one is skipped s
   assert.equal(base.media, "https://media.example.com");
 });
 
+test("favourites: endpoint, POST body (text/plain JSON) and what a response means", () => {
+  assert.equal(W.favoritesUrl(MEDIA + "/", "lisbon-2025"), MEDIA + "/lisbon-2025/favorites");
+  assert.equal(W.favoriteBody("abc123def456", true), '{"id":"abc123def456","fav":true}');
+  assert.equal(W.favoriteBody("abc123def456", 0), '{"id":"abc123def456","fav":false}');
+  const out = (r) => W.favoritesOutcome({ type: "cors", ok: r.status >= 200 && r.status < 300, ...r });
+  assert.equal(out({ status: 200 }), "ok");
+  assert.equal(out({ type: "opaqueredirect", status: 0, ok: false }), "signed-out"); // Access → its login page
+  assert.equal(out({ status: 401 }), "signed-out");
+  for (const status of [400, 403, 404, 409, 413, 500, 503]) assert.equal(out({ status }), "error", status);
+});
+
+test("favourites: ids from the Worker, toggling, the filter and its label", () => {
+  const known = new Set(["a", "b", "c"]);
+  assert.deepEqual([...W.favoriteIds({ ids: ["b", "zzz", 7, null, "a"] }, known)], ["b", "a"]);
+  for (const bad of [null, {}, { ids: "a" }, []]) assert.equal(W.favoriteIds(bad, known).size, 0);
+  const favs = new Set(["a"]);
+  const more = W.withFavorite(favs, "c", true);
+  assert.deepEqual([...more], ["a", "c"]);
+  assert.deepEqual([...favs], ["a"]); // a copy: the old set is what a rollback goes back to
+  assert.deepEqual([...W.withFavorite(more, "a", false)], ["c"]);
+  assert.deepEqual([...W.withFavorite(more, "zzz", false)], ["a", "c"]);
+  const items = [{ id: "c", t: 30 }, { id: "a", t: 10 }, { id: "b", t: 20 }];
+  assert.deepEqual(W.favoriteItems(items, more).map((x) => x.id), ["a", "c"]);
+  assert.deepEqual(W.favoriteItems(items, new Set()), []);
+  assert.equal(W.favoritesLabel(0), "Favourites (0)");
+  assert.equal(W.favoritesLabel(12), "Favourites (12)");
+});
+
+test("favourites: taps are sent one at a time, in order, and a failure doesn't block the next", async () => {
+  const queue = W.serial();
+  const log = [];
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const a = queue(async () => { log.push("a start"); await wait(20); log.push("a end"); return "A"; });
+  const b = queue(async () => { log.push("b start"); throw new Error("offline"); });
+  const c = queue(async () => { log.push("c start"); return "C"; });
+  assert.equal(await a, "A");
+  await assert.rejects(b, /offline/);
+  assert.equal(await c, "C");
+  assert.deepEqual(log, ["a start", "a end", "b start", "c start"]);
+});
+
 test("lightbox stepping wraps; HTML escaping", () => {
   assert.equal(W.step(0, 3, -1), 2);
   assert.equal(W.step(2, 3, 1), 0);

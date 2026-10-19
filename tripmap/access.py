@@ -52,8 +52,8 @@ APP_SETTINGS = {
 CFG = None  # the Wander config, loaded by main() (or on first use)
 # Read-only fields an app GET returns that a PUT must not send back.
 APP_READ_ONLY = {"id", "uid", "aud", "created_at", "updated_at", "self_hosted_domains", "policies"}
-# Worker paths that aren't trips.
-RESERVED_SLUGS = {"all", "auth", "public", "me", "trips.json"}
+# Worker paths that aren't trips (favs/ holds people's favourites).
+RESERVED_SLUGS = {"all", "auth", "public", "me", "favs", "trips.json"}
 
 TOKEN_HELP = """Cloudflare credentials not found (CF_API_TOKEN and CF_ACCOUNT_ID).
 
@@ -413,10 +413,21 @@ def cmd_setup(client, args):
             result = run()["result"]
             if kind in ("group", "policy"):
                 ids[kind] = result["id"]
+            if kind in ("app", "app-update"):
+                app = result
             log(f"  done: {kind}")
         log("Applied.")
+    report_aud(args.slug, app)
     report_protection(args.slug)
     return 0
+
+
+def report_aud(slug, app):
+    """The app's AUD tag: the Worker checks favourites' tokens against it."""
+    if app and app.get("aud"):
+        log(f"App AUD tag: {app['aud']}")
+        log(f'  Favourites: worker/wrangler.toml needs "{slug}" = "{app["aud"]}" in ACCESS_AUD; '
+            f"then deploy the Worker (RUNBOOK.md -> New trip).")
 
 
 def report_protection(slug):
@@ -491,7 +502,7 @@ def cmd_list(client, args):
         return 0
     names = {g["id"]: g["name"] for g in client.list("groups")}
     log(f"App {app.get('name')!r}: session {app.get('session_duration')}, "
-        f"launcher {'shown' if app.get('app_launcher_visible') else 'hidden'}")
+        f"launcher {'shown' if app.get('app_launcher_visible') else 'hidden'}, AUD tag {app.get('aud')}")
     for d in app.get("destinations") or []:
         log(f"  destination {d.get('uri')}")
     for p in app.get("policies") or []:

@@ -64,8 +64,18 @@ h1,h2,.brand{font-family:Fraunces,Georgia,serif;font-weight:600}
 }
 #map{height:100%;background:var(--chip)}
 .grid{overflow-y:auto;padding:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;align-content:start}
-.tile{position:relative;border:0;padding:0;border-radius:10px;overflow:hidden;background:var(--chip);cursor:pointer;aspect-ratio:1}
+.tile{position:relative;border-radius:10px;overflow:hidden;background:var(--chip);aspect-ratio:1}
+.tile .open{display:block;width:100%;height:100%;border:0;padding:0;background:none;color:inherit;cursor:pointer}
 .tile img{width:100%;height:100%;object-fit:cover;display:block}
+.tile .open:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
+/* favourite: a heart in the tile's top right corner, filled when on */
+.heart{position:absolute;top:4px;right:4px;width:36px;height:36px;display:grid;place-items:center;padding:0;border:0;
+  border-radius:999px;background:rgba(0,0,0,.45);color:#fff;cursor:pointer}
+.heart svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round}
+.heart[aria-pressed="true"]{color:#ff5d73}
+.heart[aria-pressed="true"] svg{fill:currentColor}
+.heart:focus-visible{outline:2px solid #fff;outline-offset:1px}
+.fav-chip svg{width:11px;height:11px;fill:currentColor;margin-right:4px;vertical-align:-1px}
 .tile .t{position:absolute;left:6px;bottom:6px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;border-radius:4px;padding:1px 5px}
 .tile .v{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;border-radius:4px;padding:1px 5px}
 .tile.cur{outline:3px solid var(--accent);outline-offset:-3px}
@@ -95,6 +105,7 @@ h1,h2,.brand{font-family:Fraunces,Georgia,serif;font-weight:600}
 .lb-stage img,.lb-stage video{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px}
 .lb-meta{display:flex;gap:16px;justify-content:center;align-items:center;padding:10px 16px calc(14px + env(safe-area-inset-bottom));font-size:14px}
 .lb-meta .link{color:#9fe3d9}
+.lb-meta .heart{position:static;width:44px;height:44px;flex:none;background:rgba(255,255,255,.12)}
 .lb-btn{position:absolute;background:rgba(255,255,255,.12);color:#fff;border:0;border-radius:999px;width:44px;height:44px;font-size:22px;cursor:pointer;z-index:1}
 .lb-btn:hover{background:rgba(255,255,255,.22)}
 .lb-close{top:12px;right:12px}

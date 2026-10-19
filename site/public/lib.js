@@ -157,3 +157,58 @@ export function itemCaption(x, tzOffsetMin) {
 export function step(i, n, delta) {
   return n ? (((i + delta) % n) + n) % n : -1;
 }
+
+// ---------------------------------------------------------------- favourites
+// The visitor's own favourites in a trip, kept by the Worker (SPEC.md → Favourites).
+
+export function favoritesUrl(media, slug) {
+  return joinUrl(media, `${slug}/favorites`);
+}
+
+/** The POST body. Sent as text/plain, so the browser makes a "simple" request with
+ *  no CORS preflight (Access would refuse the preflight a JSON content type needs). */
+export function favoriteBody(id, fav) {
+  return JSON.stringify({ id: String(id), fav: Boolean(fav) });
+}
+
+/** What a favourites response means (fetch with redirect: "manual"): "ok"; "signed-out"
+ *  (the Worker said 401, or a readable redirect to Access's login); else "error".
+ *  Access's own redirect usually has no CORS headers, so fetch rejects instead: ask /me. */
+export function favoritesOutcome(res) {
+  if (res.type === "opaqueredirect" || res.status === 401) return "signed-out";
+  return res.ok ? "ok" : "error";
+}
+
+/** The ids in a favourites response that this page knows, as a Set. */
+export function favoriteIds(data, known) {
+  const ids = data && Array.isArray(data.ids) ? data.ids : [];
+  return new Set(ids.filter((id) => typeof id === "string" && known.has(id)));
+}
+
+/** A copy of `favs` with `id` added (fav) or removed. */
+export function withFavorite(favs, id, fav) {
+  const next = new Set(favs);
+  if (fav) next.add(id);
+  else next.delete(id);
+  return next;
+}
+
+/** The favourites among `items`, in time order. */
+export function favoriteItems(items, favs) {
+  return itemsFor(items).filter((x) => favs.has(x.id));
+}
+
+export function favoritesLabel(n) {
+  return `Favourites (${n})`;
+}
+
+/** Runs async tasks one at a time, in order; a failed task doesn't stop the next.
+ *  Favourite taps go through one of these, so two quick taps can't overwrite each other. */
+export function serial() {
+  let tail = Promise.resolve();
+  return (task) => {
+    const run = tail.then(task);
+    tail = run.catch(() => {});
+    return run;
+  };
+}

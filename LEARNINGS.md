@@ -1,6 +1,6 @@
 # Wander — Learnings
 
-Hard-won lessons. Each one: **symptom → cause → fix/rule**. Add new ones here, not in CLAUDE.md. Accepted limitations are rows too; the design decisions behind it all are under [Decisions](#decisions) (D1–D10).
+Hard-won lessons. Each one: **symptom → cause → fix/rule**. Add new ones here, not in CLAUDE.md. Accepted limitations are rows too; the design decisions behind it all are under [Decisions](#decisions) (D1–D11).
 
 ## Cloudflare / hosting
 
@@ -18,6 +18,10 @@ Hard-won lessons. Each one: **symptom → cause → fix/rule**. Add new ones her
 | Two kinds of Access policy | Reusable (`/access/policies`, attached as `policies: [{id, precedence}]`) vs legacy app-scoped (`/apps/{id}/policies`); mutually exclusive, and legacy can't be added to new apps. A reusable policy still shows up under the app endpoint, with `reusable: true` | Thailand uses a reusable policy; new trips do too |
 | A rule group can't be empty | `include` is required and must hold a rule | Placeholder email `nobody@wander.invalid` (RFC 2606 `.invalid` can't exist) |
 | Two session lengths | The app has `session_duration` (24 h) and so does the policy (730 h) | Mirror both; check them in `access.py list` |
+| A JSON POST from the site would never reach the Worker | `Content-Type: application/json` (or any custom header) makes the browser send a CORS preflight first; Access answers an OPTIONS without a cookie with 403 (`options_preflight_bypass` is off, and stays off) | Writes are "simple requests": a `text/plain` body holding JSON, no custom headers. The Worker accepts that, and refuses any POST whose `Origin` isn't in `SITE_ORIGINS` (CSRF) |
+| The site couldn't tell "signed out" from "offline" | Browsers run the CORS check before handling a redirect, so a 302 without CORS headers makes `fetch` reject with a TypeError, even with `redirect: "manual"`. In the local mock it did | Access's 302 does carry `Access-Control-Allow-Origin` + credentials for the site's origin (seen live, 2026-10-20), so `redirect: "manual"` gives a readable `opaqueredirect` = signed out. Fallback for a TypeError: `GET /me`; `email` null = signed out |
+| Favourites needed the visitor's identity in the Worker | The `CF_Authorization` cookie can be sent by anyone; Access adds `Cf-Access-Jwt-Assertion` to requests it let through | Verify that header (team's RS256 keys, `iss`, `exp`, `aud` = this trip's app) and take the email only from it. Each trip's AUD lives in `ACCESS_AUD` in `wrangler.toml`, so a new trip needs a Worker deploy for its hearts |
+| The favourites salt can't be read back | Worker secrets are write-only | Keep the only readable copy in `~/.wander/favs-salt`; it's needed to find one person's file. A new salt orphans every file |
 
 ## R2 / rclone
 
@@ -86,3 +90,5 @@ Hard-won lessons. Each one: **symptom → cause → fix/rule**. Add new ones her
 **D9 — Esri tiles in the local viewer.** CARTO began requiring an API key.
 
 **D10 — One public repo; each instance's settings live outside git.** Domains, bucket, rclone remote and Access naming are in `~/.wander/config.json` (Python tools) and a gitignored `worker/wrangler.toml` (the Worker's route, bucket and `SITE_ORIGINS`), each with a committed `*.example.*` template. Two files rather than one because wrangler needs its own format for routes and bindings; they only share the media host and bucket. Owner-specific notes for Claude Code live in `~/.wander/NOTES.md`, which CLAUDE.md imports when present. Docs and tests use example.com and a made-up trip. Sign-in now returns only to an exact `SITE_ORIGINS` origin (it used to accept any subdomain of the owner's domain).
+
+**D11 — Favourites are per person, in R2, keyed by a salted hash of the email.** Synced across devices without a database: one small JSON file per person per trip (`favs/<slug>/<sha256(salt + email)>.json`), read and written only by the Worker at `/<slug>/favorites`, which the trip's Access app already guards. Identity comes from the Access token the Worker verifies, never from the page. The salt is a Worker secret, so file names can't be reversed by hashing known emails; no email is stored. v1 is private (no shared counts). Read-modify-write with last write wins is fine for one person tapping a few hearts; the site queues its taps. Rejected: browser storage (doesn't sync, and the client rules forbid storing trip data), a KV/D1 database (D6), sending the email from the page (forgeable).

@@ -80,6 +80,7 @@ In `wrangler.toml` (gitignored), set:
 - `routes` → `pattern = "media.example.com"`, your media host. `custom_domain = true` makes Cloudflare create its DNS record; the name must not already have one.
 - `bucket_name` → your bucket.
 - `SITE_ORIGINS` → your site's origin, e.g. `"https://wander.example.com"`. Comma-separate extra origins (a builder's preview, say). Only these may read trips with the sign-in cookie, and sign-in only sends people back to them.
+- `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` → for favourites; leave them for now ([step 9](#9-favourites-optional)).
 
 ```
 npm test
@@ -155,6 +156,30 @@ Any static site can be the front end; it only reads JSON from the media host.
 - **Build your own:** the [data contract](SPEC.md#data-contract--build-your-own-site) has the two file formats and the client rules (credentials, no `crossorigin` on media tags, times in the trip's zone, the `/auth/<slug>` sign-in hop). The live example was built with Lovable from that contract.
 
 Wherever it's hosted, give it a host name on the same domain as the media host (e.g. `wander.example.com`) and make sure its origin is in the Worker's `SITE_ORIGINS` (step 5; redeploy after changing it).
+
+## 9. Favourites (optional)
+
+Signed-in visitors can heart shots; each person's favourites sync across their devices and nobody else sees them ([SPEC.md → Favourites](SPEC.md#favourites)). The Worker checks the token Access adds to each request, so it needs three things, then a redeploy:
+
+1. **Your team domain:** Zero Trust → Settings → **Team name and domain**, e.g. `https://your-team.cloudflareaccess.com`.
+2. **Each trip's AUD tag:** `python tripmap/access.py list lisbon-2025` prints it (so does `setup`).
+3. In `worker/wrangler.toml`, under `[vars]` (the example has these commented out):
+   ```
+   ACCESS_TEAM_DOMAIN = "https://your-team.cloudflareaccess.com"
+   ACCESS_AUD = { "lisbon-2025" = "<its AUD tag>" }
+   ```
+   One `"<slug>" = "<AUD>"` per trip; add each new trip's line before you deploy (RUNBOOK → New trip).
+4. **A secret salt,** so favourites' file names (a hash of the email) can't be matched to known emails. Keep a copy: Cloudflare never shows a secret again, and you need it to find one person's file. From the repo root (mac/Linux: `python3`):
+   ```
+   python -c "import secrets,pathlib; p=pathlib.Path.home()/'.wander'/'favs-salt'; p.exists() or p.write_text(secrets.token_hex(32))"
+   cd worker
+   python -c "import pathlib,sys; sys.stdout.write((pathlib.Path.home()/'.wander'/'favs-salt').read_text())" | npx wrangler secret put FAVS_SALT
+   npm test && npx wrangler deploy
+   cd ..
+   ```
+   Then the checks in [RUNBOOK.md → Worker deploys](RUNBOOK.md#worker-deploys).
+
+Without these, everything else works and `/<slug>/favorites` answers 500, so the reference viewer shows no hearts.
 
 ## Next
 

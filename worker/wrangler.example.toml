@@ -20,3 +20,10 @@ bucket_name = "trip-media"
 # cookie (CORS with credentials), and sign-in only sends people back to them.
 # The first one is the default place to send people after sign-in.
 SITE_ORIGINS = "https://wander.example.com"
+
+# Favourites (optional; without these, /<slug>/favorites answers 500 and sites hide
+# their hearts). Your Zero Trust team domain, and each trip's Access app AUD tag:
+# `python tripmap/access.py list <slug>` prints it. Add a line per trip, then deploy.
+# Also a secret salt, never in this file. See SETUP.md step 9.
+# ACCESS_TEAM_DOMAIN = "https://your-team.cloudflareaccess.com"
+# ACCESS_AUD = { "lisbon-2025" = "<the lisbon-2025 app's AUD tag>" }

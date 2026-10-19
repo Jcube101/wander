@@ -75,6 +75,8 @@ class FakeCF(access.Client):
         if method == "POST":
             self.n += 1
             obj = dict(body, id=f"new-{parts[0]}-{self.n}")
+            if parts[0] == "apps":
+                obj["aud"] = f"aud-{obj['id']}"  # Cloudflare gives each new app an AUD tag
             self.state[parts[0]].append(obj)
             return {"success": True, "result": obj}
         if method == "PUT":
@@ -170,8 +172,23 @@ class Setup(unittest.TestCase):
         self.assertNotIn("DELETE", [m for m, _, _ in cf.calls])
 
     def test_bad_slug(self):
-        with self.assertRaises(SystemExit):
-            run(["setup", "auth", "Auth"], FakeCF(*existing_trip()))
+        for slug in ("auth", "favs"):
+            with self.subTest(slug=slug), self.assertRaises(SystemExit):
+                run(["setup", slug, "Auth"], FakeCF(*existing_trip()))
+
+    def test_prints_the_app_aud_for_the_workers_favourites(self):
+        groups, policies, apps = existing_trip()
+        apps[0]["name"] = f"Wander {D} Lisbon 2025"
+        code, out = run(["setup", "lisbon-2025", "Lisbon 2025", "--dry-run"], FakeCF(groups, policies, apps))
+        self.assertEqual(code, 0, out)
+        self.assertIn("App AUD tag: aud", out)
+        self.assertIn('"lisbon-2025" = "aud" in ACCESS_AUD', out)
+        cf = FakeCF(*existing_trip())  # a new trip: the AUD only exists once the app is created
+        _, out = run(["setup", "bali-2027", "Bali 2027", "--dry-run"], cf)
+        self.assertNotIn("AUD", out)
+        _, out = run(["setup", "bali-2027", "Bali 2027", "--yes"], cf)
+        self.assertIn("App AUD tag: aud-new-apps-3", out)
+        self.assertIn('"bali-2027" = "aud-new-apps-3" in ACCESS_AUD', out)
 
 
 class Members(unittest.TestCase):
@@ -239,6 +256,7 @@ class Members(unittest.TestCase):
         self.assertIn("b@example.com", out)
         self.assertNotIn(access.PLACEHOLDER, out)
         self.assertIn("destination media.example.com/auth/lisbon-2025", out)
+        self.assertIn("AUD tag aud", out)
         self.assertIn(f"allow if Wander {D} Lisbon crew OR Wander {D} All trips", out)
 
 

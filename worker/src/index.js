@@ -7,12 +7,19 @@
 //   <media host>/auth/<slug>   (the sign-in hop used by the website)
 // This Worker only serves an explicit allow-list of files, never lists the
 // bucket, supports Range requests (video seeking), and answers the website's
-// cross-site requests with cookies allowed.
+// cross-site requests with cookies allowed. The one thing it writes is each
+// visitor's own favourites (/<slug>/favorites, kept under favs/, never served).
 //
 // Settings (wrangler.toml [vars]):
 //   SITE_ORIGINS  comma-separated site origins, e.g. "https://wander.example.com".
 //                 They get CORS with credentials, and /auth only sends people back
 //                 to them. The first one is where /auth goes when no return is given.
+//   ACCESS_TEAM_DOMAIN  e.g. "https://your-team.cloudflareaccess.com": issues the
+//                 Access tokens and publishes the keys that sign them. Favourites only.
+//   ACCESS_AUD    { "<slug>" = "<that trip's Access app AUD tag>" }. Favourites only:
+//                 a trip missing here answers 500 on /<slug>/favorites.
+// Secret (npx wrangler secret put FAVS_SALT): salts the hashed email in favourites'
+// file names, so they can't be matched to known emails. Favourites only.
 
 // Parsed once per SITE_ORIGINS value.
 let parsed = { raw: null, list: [], set: new Set() };
@@ -41,7 +48,7 @@ function corsHeaders(request, sites) {
   return {
     "access-control-allow-origin": origin,
     "access-control-allow-credentials": "true",
-    "access-control-allow-methods": "GET, HEAD, OPTIONS",
+    "access-control-allow-methods": "GET, HEAD, POST, OPTIONS",
     "access-control-allow-headers": "range",
     "access-control-expose-headers": "content-length, content-range, accept-ranges, etag",
     vary: "Origin",
@@ -82,6 +89,205 @@ function safeReturn(raw, sites, fallback) {
   return fallback;
 }
 
+// ---------------------------------------------------------------- favourites
+// GET  /<slug>/favorites                          → {"ids": [...]}
+// POST /<slug>/favorites  {"id": "...", "fav": b}  → the updated {"ids": [...]}
+// Each signed-in visitor's own list, in favs/<slug>/<sha256(FAVS_SALT + email)>.json.
+// The trip's Access app guards /<slug> already; on top of that the token Access
+// forwards must verify, and the email comes only from it. POST must be a "simple"
+// request (text/plain body): Access refuses the CORS preflight a JSON one would need.
+const FAVORITES = /^([a-z0-9-]+)\/favorites$/;
+const MAX_FAVS = 2000;
+const MAX_BODY = 1024; // bytes; {"id":"<12 hex>","fav":false} is ~30
+const TRIP_TTL = 60 * 1000; // a trip's item ids, per isolate
+const CERTS_TTL = 60 * 60 * 1000;
+
+class CertsUnavailable extends Error {}
+
+function favoritesConfig(env, slug) {
+  const team = String(env.ACCESS_TEAM_DOMAIN || "").trim().replace(/\/+$/, "");
+  let auds = env.ACCESS_AUD;
+  if (typeof auds === "string") {
+    try { auds = JSON.parse(auds); } catch { auds = null; }
+  }
+  const aud = auds && typeof auds === "object" && Object.hasOwn(auds, slug) ? auds[slug] : null;
+  const salt = String(env.FAVS_SALT || "").trim();
+  if (!/^https:\/\/[a-z0-9.-]+$/.test(team) || typeof aud !== "string" || !aud || !salt) return null;
+  return { team, aud, salt };
+}
+
+function base64url(s) {
+  const bin = atob(s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (s.length % 4)) % 4));
+  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+}
+
+// Access's signing keys, by key id. Refetched hourly, or (at most once a minute)
+// when a token names a key we don't have, since Cloudflare rotates them.
+let certs = { url: null, at: 0, keys: new Map() };
+async function signingKey(team, kid) {
+  const url = `${team}/cdn-cgi/access/certs`;
+  const age = certs.url === url ? Date.now() - certs.at : Infinity;
+  if (age > CERTS_TTL || (!certs.keys.has(kid) && age > 60 * 1000)) {
+    let jwks;
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      jwks = (await r.json()).keys || [];
+    } catch (e) {
+      throw new CertsUnavailable(String(e));
+    }
+    const keys = new Map();
+    for (const jwk of jwks) {
+      if (jwk.kty !== "RSA" || typeof jwk.kid !== "string") continue;
+      try {
+        keys.set(jwk.kid, await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]));
+      } catch { /* not a usable signing key */ }
+    }
+    certs = { url, at: Date.now(), keys };
+  }
+  return certs.keys.get(kid) || null;
+}
+
+// The visitor's email, lowercased, from the Access token on this request: signed by
+// the team's keys, issued by the team, not expired, and for this trip's app. Else null.
+// Only the Cf-Access-Jwt-Assertion header counts (Access sets it); never the page.
+async function accessEmail(request, cfg) {
+  const parts = (request.headers.get("cf-access-jwt-assertion") || "").split(".");
+  if (parts.length !== 3) return null;
+  let header, claims, signature;
+  try {
+    const decode = (p) => JSON.parse(new TextDecoder().decode(base64url(p)));
+    header = decode(parts[0]);
+    claims = decode(parts[1]);
+    signature = base64url(parts[2]);
+  } catch {
+    return null;
+  }
+  if (!header || header.alg !== "RS256" || typeof header.kid !== "string" || !claims || typeof claims !== "object") return null;
+  const key = await signingKey(cfg.team, header.kid);
+  if (!key) return null;
+  const signed = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
+  if (!(await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, signature, signed))) return null;
+  const now = Date.now() / 1000;
+  const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  if (claims.iss !== cfg.team || !aud.includes(cfg.aud)) return null;
+  if (typeof claims.exp !== "number" || claims.exp <= now) return null;
+  if (typeof claims.nbf === "number" && claims.nbf > now + 60) return null;
+  if (typeof claims.email !== "string" || !claims.email.includes("@")) return null;
+  return claims.email.toLowerCase();
+}
+
+// Ids of the items a trip publishes (archived shots aren't in trip.json), or null.
+const tripIds = new Map();
+async function knownIds(env, slug) {
+  const hit = tripIds.get(slug);
+  if (hit && Date.now() - hit.at < TRIP_TTL) return hit.ids;
+  const obj = await env.BUCKET.get(`${slug}/trip.json`);
+  if (!obj) {
+    tripIds.delete(slug);
+    return null;
+  }
+  const items = JSON.parse(await obj.text()).items || [];
+  const ids = new Set(items.map((x) => x && x.id).filter((id) => typeof id === "string"));
+  tripIds.set(slug, { at: Date.now(), ids });
+  return ids;
+}
+
+async function favoritesKey(slug, salt, email) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(salt + email));
+  const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return `favs/${slug}/${hex}.json`;
+}
+
+async function storedIds(env, key) {
+  const obj = await env.BUCKET.get(key);
+  if (!obj) return [];
+  try {
+    const ids = JSON.parse(await obj.text()).ids;
+    return Array.isArray(ids) ? ids.filter((id) => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+// The body as text, or null if it's over `max` bytes.
+async function readBody(request, max) {
+  if (Number(request.headers.get("content-length")) > max) return null;
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const chunks = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const all = new Uint8Array(size);
+  let at = 0;
+  for (const c of chunks) {
+    all.set(c, at);
+    at += c.byteLength;
+  }
+  return new TextDecoder().decode(all);
+}
+
+async function favorites(request, env, slug, sites, cors) {
+  const fail = (msg, status, extra = {}) => text(msg, status, { ...cors, ...extra });
+  const json = (ids) => new Response(JSON.stringify({ ids }), {
+    status: 200,
+    headers: { ...cors, "content-type": "application/json", "cache-control": "private, no-store", "x-content-type-options": "nosniff" },
+  });
+  if (request.method !== "GET" && request.method !== "POST") return fail("Method not allowed", 405, { allow: "GET, POST" });
+  // CSRF: the cookie rides along on any site's form or fetch, so writes must come from ours.
+  if (request.method === "POST" && !sites.set.has(request.headers.get("origin"))) return fail("Forbidden", 403);
+  const cfg = favoritesConfig(env, slug);
+  if (!cfg) return fail("Not configured: favourites need ACCESS_TEAM_DOMAIN, this trip in ACCESS_AUD, and FAVS_SALT", 500);
+  let email;
+  try {
+    email = await accessEmail(request, cfg);
+  } catch (e) {
+    if (e instanceof CertsUnavailable) return fail("Couldn't check the sign-in; try again", 503);
+    throw e;
+  }
+  if (!email) return fail("Sign in first", 401);
+  const ids = await knownIds(env, slug);
+  if (!ids) return fail("Not found", 404);
+  const key = await favoritesKey(slug, cfg.salt, email);
+  const current = (await storedIds(env, key)).filter((id) => ids.has(id)); // drops archived shots
+  if (request.method === "GET") return json(current);
+
+  const type = (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+  if (type !== "text/plain" && type !== "application/json") return fail("Send the JSON body as text/plain", 415);
+  const raw = await readBody(request, MAX_BODY);
+  if (raw === null) return fail("Too large", 413);
+  let body;
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    return fail("The body must be JSON", 400);
+  }
+  if (!body || typeof body !== "object" || typeof body.id !== "string" || typeof body.fav !== "boolean") {
+    return fail('Expected {"id": "<item id>", "fav": true|false}', 400);
+  }
+  if (!ids.has(body.id)) return fail("No such item in this trip", 400);
+  if (body.fav === current.includes(body.id)) return json(current);
+  if (body.fav && current.length >= MAX_FAVS) return fail(`Too many favourites (at most ${MAX_FAVS} per trip)`, 409);
+  const next = body.fav ? [...current, body.id] : current.filter((id) => id !== body.id);
+  // Read-modify-write; last write wins (one person, a few taps a minute).
+  if (next.length) {
+    await env.BUCKET.put(key, JSON.stringify({ version: 1, ids: next, updated: new Date().toISOString() }),
+      { httpMetadata: { contentType: "application/json" } });
+  } else {
+    await env.BUCKET.delete(key);
+  }
+  return json(next);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -91,14 +297,20 @@ export default {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: { ...cors, "access-control-max-age": "86400" } });
     }
-    if (request.method !== "GET" && request.method !== "HEAD") {
-      return text("Method not allowed", 405, { allow: "GET, HEAD" });
-    }
 
     // Use the path exactly as sent; our names never need %-encoding, so any
     // encoded character is refused (Access and this Worker can't disagree).
     const path = url.pathname.slice(1);
     if (path.includes("%") || path.includes("..") || path.includes("//")) return text("Not found", 404, cors);
+    // People's favourites: only ever through /<slug>/favorites, never as files.
+    if (path === "favs" || path.startsWith("favs/")) return text("Not found", 404, cors);
+
+    const fav = path.match(FAVORITES);
+    if (fav) return favorites(request, env, fav[1], sites, cors);
+
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      return text("Method not allowed", 405, { allow: "GET, HEAD" });
+    }
 
     // Sign-in hop: Access guards /auth/<slug>; once signed in, send them back.
     const auth = path.match(/^auth\/([a-z0-9-]+)$/);

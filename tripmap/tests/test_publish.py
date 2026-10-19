@@ -348,6 +348,35 @@ class Publish(unittest.TestCase):
         self.assertIn("rcat", rc.steps)
         self.assertNotIn("R2 storage:", out)
 
+    # --- favourites (favs/<slug>/… at the bucket root) are never touched
+    def test_cleanup_only_deletes_previews_inside_the_trip(self):
+        stale = ["media/old.mp4", "thumbs/archived.jpg"]
+        # A listing of <slug>/ can't really hold these, but even if it did, they stay.
+        odd = ["trip.json", "favorites", "favs/bali-2027/abc.json", "../favs/bali-2027/abc.json",
+               "media/../../favs/bali-2027/abc.json", "notes/x.json"]
+        rc = FakeRclone(remote=self.refs + stale + odd)
+        code, _ = self.run_main(rc)
+        self.assertIsNone(code)
+        self.assertEqual(rc.lists["delete"], stale)
+        deletes = [c for c in rc.calls if c[0] == "delete"]
+        self.assertEqual([c[1] for c in deletes], ["r2:trip-media/bali-2027"])
+        for path in rc.lists["delete"]:
+            self.assertTrue(path.startswith(publish.PREVIEW_DIRS), path)
+        for call in rc.calls:  # nothing in a publish ever names favs/
+            self.assertFalse(any("favs" in str(a) for a in call), call)
+        self.assertEqual({c[0] for c in rc.calls} & {"purge", "rmdir", "rmdirs", "sync", "move", "deletefile"}, set())
+
+    def test_reserved_slug_is_refused_before_anything(self):
+        tj = self.out / "trip.json"
+        trip = json.loads(tj.read_text())
+        for slug in ("favs", "auth", "public", "me"):
+            with self.subTest(slug=slug):
+                tj.write_text(json.dumps(dict(trip, slug=slug)))
+                rc = FakeRclone(remote=self.refs)
+                code, _ = self.run_main(rc, "--allow-unprotected")
+                self.assertIn(f"'{slug}' can't be a trip's slug", code)
+                self.assertEqual(rc.steps, [])
+
     def test_dry_run_still_runs_access_guard(self):
         rc = FakeRclone()
         code, _ = self.run_main(rc, "--dry-run", protected=False)

@@ -49,7 +49,7 @@ flowchart LR
 - **Originals** stay on your disk. `build.py` reads them (never changes them) and writes `_tripmap/` next to them: thumbnails, 640 px cards, 1600 px photos, 720p videos and the map data.
 - **The editor** (`serve.py` + `viewer.html`) runs only on your machine and saves fixes to `overrides.json` in the trip folder.
 - **Publish** uploads only what the trip's `trip.json` references, then updates the public `trips.json` list and covers.
-- **The Worker** serves an allow-list of files from the private bucket. **Access** decides who sees which trip; the Worker never does.
+- **The Worker** serves an allow-list of files from the private bucket. **Access** decides who sees which trip; the Worker never does. It also keeps each visitor's favourites (hearted shots, private to them, synced across their devices) as small JSON files in the bucket.
 - **The site** is just a static page that reads `trips.json` and `<slug>/trip.json` from the media host with the visitor's cookie.
 
 ## Quick start

@@ -35,6 +35,7 @@ Tests use `wander.config.example.json` (example.com and a made-up trip), never y
 - **Never commit personal data:** no photos or videos, no coordinates, no `trip.json`/`trips.json`/`overrides.json`/`clip_locations.csv`, no keys or tokens, no real emails (use `@example.com`). `.gitignore` enforces most of this; please don't weaken it.
 - **The Worker's path rules stay strict:** keys are used exactly as sent, and any `%`-encoding, `..` or `//` is refused, so Cloudflare Access and the Worker can never disagree about a path. The Worker only serves its allow-list of file types and never decides *who* may see a trip (Access does).
 - **No database.** Identity is the Cloudflare Access cookie; data is static JSON in R2.
+- **Favourites stay private:** the Worker takes the visitor's email only from the Access token it verifies, stores favourites under a salted hash of it in `favs/`, and never serves `favs/` as files; `publish.py` never deletes outside a trip's `thumbs/`, `cards/` and `media/`. Writes from a site are CORS "simple requests" (`text/plain`), because Access refuses preflights.
 - **Local-only files never go online:** `trip.js` and `index.html` in `_tripmap/` hold folder paths; `publish.py` never uploads them and the Worker refuses them.
 - **Data contract:** `trip.json`/`trips.json` are the interface sites build on ([SPEC.md](SPEC.md#data-contract--build-your-own-site)). A change there needs the spec updated in the same pull request.
 
